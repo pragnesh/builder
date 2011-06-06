@@ -218,13 +218,16 @@ def main(options):
 		try:
 			print path('%s' % conf) + ' not found, creating'
 			while not defaults['key']:
-				sys.stdout.write(' AWS Key: ')
-				defaults['key'] = sys.stdin.readline().strip()
+				defaults['key'] = raw_input(' AWS Key: ')
+				#sys.stdout.write(' AWS Key: ')
+				#defaults['key'] = sys.stdin.readline().strip()
 			while not defaults['secret']:
-				sys.stdout.write('  Secret: ')
-				defaults['secret'] = sys.stdin.readline().strip()
-			sys.stdout.write('SVN Repo: ')
-			defaults['repo'] = sys.stdin.readline().strip()
+				defaults['secret'] = raw_input('  Secret: ')
+				#sys.stdout.write('  Secret: ')
+				#defaults['secret'] = sys.stdin.readline().strip()
+			defaults['repo'] = raw_input('SVN Repo: ')
+			#sys.stdout.write('SVN Repo: ')
+			#defaults['repo'] = sys.stdin.readline().strip()
 			json.dump(defaults, open(conf, 'w'), sort_keys=True, indent=4)
 			if 'EDITOR' in os.environ:
 				subprocess.call('%s %s' % (os.environ['EDITOR'], conf), shell=True)
