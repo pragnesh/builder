@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import boto, json, optparse, os, os.path, subprocess, sys, time, webbrowser
+import BaseHTTPServer
 
 default_ami      = 'ami-1aad5273' #64-bit Ubuntu 11.04, us-east-1
 default_key_pair = 'ec2.example'
@@ -85,6 +86,35 @@ def update(ec2, env, source):
 		if 'url' in machine:
 			webbrowser.open('http://%s%s' % (machine['host'], machine['url']))
 
+class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
+	def do_GET(self):
+		pass
+	def do_POST(self):
+		pass
+
+def map(ec2):
+	keys = {}
+	for k in ec2.get_all_key_pairs():
+		keys[k.name] = k.fingerprint
+	groups = {}
+	for s in ec2.get_all_security_groups():
+		rules = {}
+		for r in s.rules:
+			g = str(r.grants)
+			if g not in rules: rules[g] = []
+			rules[g].append('%s:[%s%s]' % (r.ip_protocol, r.from_port,
+				r.to_port != r.from_port and '-'+r.to_port or ''))
+		groups[s.name] = rules
+	instances = {}
+	for r in ec2.get_all_instances():
+		for i in r.instances:
+			if i.image_id not in instances:
+				instances[i.image_id] = {}
+			if i.state not in instances[i.image_id]:
+				instances[i.image_id][i.state] = []
+			instances[i.image_id][i.state].append(i)
+	return keys, groups, instances
+
 def main(options):
 	conf = os.path.abspath(options.conf)
 	if not os.path.exists(conf):
@@ -111,33 +141,20 @@ def main(options):
 		ec2.create_key_pair(options.key).save(cwd)
 		print 'Generated %s' % path(os.path.join(cwd, '%s.pem'%options.key))
 	if options.map:
+		keys, groups, instances = map(ec2)
 		print 'Key Pairs:'
-		for k in ec2.get_all_key_pairs():
-			print '\t', k.name, '\t', k.fingerprint
+		for k, v in keys.iteritems():
+			print '\t', k, '\t', v
 		print
 		print 'Security Groups:'
-		for s in ec2.get_all_security_groups():
-			print '\t', s.name
-			rules = {}
-			for r in s.rules:
-				g = str(r.grants)
-				if g not in rules: rules[g] = []
-				rules[g].append('%s:[%s%s]' % (r.ip_protocol, r.from_port,
-					r.to_port != r.from_port and '-'+r.to_port or ''))
-			for k,v in rules.iteritems():
-				print '\t\t', k
-				for g in v: print '\t\t\t', g
+		for k, v in groups.iteritems():
+			print '\t', k
+			for k2, v2 in v.iteritems():
+				print '\t\t', k2
+				for g in v2: print '\t\t\t', g
 		print
 		print 'Instances:'
-		inst = {}
-		for r in ec2.get_all_instances():
-			for i in r.instances:
-				if i.image_id not in inst:
-					inst[i.image_id] = {}
-				if i.state not in inst[i.image_id]:
-					inst[i.image_id][i.state] = []
-				inst[i.image_id][i.state].append(i)
-		for k, v in inst.iteritems():
+		for k, v in instances.iteritems():
 			print '\tAMI: %s (%s)' % (k, 'running' in v and 
 					', '.join([g.groupName for g in v['running'][0].groups])
 					or 'no images running')
