@@ -225,7 +225,7 @@ def main(options):
 				defaults['secret'] = sys.stdin.readline().strip()
 			sys.stdout.write('SVN Repo: ')
 			defaults['repo'] = sys.stdin.readline().strip()
-			json.dump(defaults, open(conf, 'w'), indent=4)
+			json.dump(defaults, open(conf, 'w'), sort_keys=True, indent=4)
 			if 'EDITOR' in os.environ:
 				subprocess.call('%s %s' % (os.environ['EDITOR'], conf), shell=True)
 			if not defaults['repo']: warning('-t deployments will not work without a defined repo')
