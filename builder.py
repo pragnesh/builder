@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import datetime, json, optparse, os, os.path, subprocess, sys, time, webbrowser
-import BaseHTTPServer, threading, urlparse
+import BaseHTTPServer, tempfile, threading, urlparse
 import boto, paramiko
 
 default_ami      = 'ami-1aad5273' #64-bit Ubuntu 11.04, us-east-1
@@ -44,8 +44,11 @@ def ssh(host, key, command):
 def prepare(settings, dir=None, tag=None):
 	if dir: source = os.path.abspath(dir)
 	else:
-		source = None #TODO: Checkout repo
-		error('svn not implemented')
+		source = tempfile.mkdtemp(prefix='builder.%s.' %
+				settings['repo'].split('/')[-2])
+		if tag not in ('trunk', ''): tag = 'tags/%s' % tag
+		subprocess.call('svn co %s%s %s' %
+				(settings['repo'], tag, source), shell=True)
 	return source
 
 def get_instance(ec2, hostname):
