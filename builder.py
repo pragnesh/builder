@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-import boto, json, optparse, os, os.path, subprocess, sys, time, webbrowser
+import datetime, json, optparse, os, os.path, subprocess, sys, time, webbrowser
 import BaseHTTPServer, threading, urlparse
+import boto, paramiko
 
 default_ami      = 'ami-1aad5273' #64-bit Ubuntu 11.04, us-east-1
 default_key_pair = 'ec2.example'
@@ -47,6 +48,14 @@ def prepare(settings, dir=None, tag=None):
 		error('svn not implemented')
 	return source
 
+def get_instance(ec2, hostname):
+	""" Return an ec2 instance given a hostname or return None """
+	for reservation in ec2.get_all_instances(filters={'dns-name':hostname}):
+		for instance in reservation.instances:
+			if instance.public_dns_name == hostname:
+				return instance
+	return None
+
 def build(ec2, env, source):
 	if isinstance(env, dict): env=[env]
 	for machine in env:
@@ -92,6 +101,12 @@ def update(ec2, env, source):
 			ssh(machine['host'], key, command)
 		if 'url' in machine:
 			webbrowser.open('http://%s%s' % (machine['host'], machine['url']))
+
+		# Image the updated instance
+		instance = get_instance(ec2, machine['host'])
+		now = datetime.datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
+		ec2.create_image(instance, '%s %s' % (machine['name'],now), 
+				description='Image of %s on %s' % (machine['name'],now))
 
 class Background(threading.Thread):
 	def __init__(self, fn, finish=None, args=None, kwargs=None):
@@ -198,6 +213,10 @@ def map(ec2):
 def main(options):
 	conf = os.path.abspath(options.conf)
 	if not os.path.exists(conf):
+		if options.template:
+			template = os.path.abspath(options.template)
+			if os.path.exists(template):
+				defaults.update(json.load(open(template,'r')))
 		try:
 			print path('%s' % conf) + ' not found, creating'
 			while not defaults['key']:
@@ -305,5 +324,8 @@ if __name__ == '__main__':
 	parser.add_option('-l', '--listen',
 			help='listen for requests on port PORT',
 			metavar='PORT', type='int')
+	parser.add_option('-T', '--template',
+			help='use template to build out config file',
+			metavar='FILE')
 	(kwargs, args) = parser.parse_args()
 	main(kwargs)
