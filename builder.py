@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import boto, json, optparse, os, os.path, subprocess, sys, time, webbrowser
-import BaseHTTPServer
+import BaseHTTPServer, urlparse #Web interface
 
 default_ami      = 'ami-1aad5273' #64-bit Ubuntu 11.04, us-east-1
 default_key_pair = 'ec2.example'
@@ -39,6 +39,13 @@ def ssh(host, key, command):
 
 #def ssh(host, key, command):
 #	subprocess.call('ssh -i %s ubuntu@%s "%s"' % (key, host, command), shell=True)
+
+def prepare(settings, dir):
+	if dir: source = os.path.abspath(dir)
+	else:
+		source = None #TODO: Checkout repo
+		error('svn not implemented')
+	return source
 
 def build(ec2, env, source):
 	if isinstance(env, dict): env=[env]
@@ -87,10 +94,56 @@ def update(ec2, env, source):
 			webbrowser.open('http://%s%s' % (machine['host'], machine['url']))
 
 class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
+	html = '''<!doctype html><html>
+	<head><title>Build Server %(version)s</title>
+		<style type="text/css">
+		.waiting {color:#0f0;}
+		.building {color:#f00;}
+		.updating {color:#00f;}
+		.footer {font:x-small monospace; white-space:pre-wrap;}
+		</style>
+	</head>
+	<body>
+		<form method="POST">
+		<div>Status: <span class="%(status)s">%(status)s</span></div>
+		%(actions)s
+		</form>
+		%(fortune)s
+	</body>
+	</html>
+	'''
+	actions = '''<input name="action" type="submit" value="Build" />
+	<input name="action" type="submit" value="Update" />'''
 	def do_GET(self):
-		pass
+		if self.path != '/':
+			self.send_response(204)
+			return
+		self.send_response(200)
+		self.send_header('Content-Type', 'text/html')
+		self.end_headers()
+		kwargs = {'actions':'', 'status':self.server.status, 'version':VERSION}
+		try:
+			kwargs['fortune'] = '<div class="footer">%s</div>' % subprocess.check_output('fortune')
+		except: kwargs['fortune'] = ''
+		if self.server.status == 'waiting':
+			kwargs['actions'] = self.actions
+		self.wfile.write(self.html % kwargs)
 	def do_POST(self):
-		pass
+		self.send_response(301)
+		self.send_header('Location', '/')
+		self.end_headers()
+		if self.server.status == 'waiting':
+			post = urlparse.parse_qs(self.rfile.readline())
+			action = post['action'][0]
+			env = self.server.settings['deploy'][post['env'][0]]
+			source = prepare(self.server.settings, dir=self.server.dir)
+			if action == 'Build':
+				self.server.status = 'building'
+			elif action == 'Update':
+				self.server.status = 'updating'
+				update(self.server.ec2, env, source)
+			#TODO: Output
+			self.server.status = 'waiting'
 
 def map(ec2):
 	keys = {}
@@ -136,6 +189,17 @@ def main(options):
 			error('conf file creation interrupted')
 	settings = json.load(open(conf))
 	ec2 = boto.connect_ec2(settings['key'], settings['secret'])
+	if options.listen:
+		server = BaseHTTPServer.HTTPServer(('', options.listen), BuildServer)
+		server.dir = options.dir
+		server.settings = settings
+		server.status = 'waiting'
+		server.ec2 = ec2
+		BuildServer.actions = '<select name="env">%s</select> ' % ''.join(
+				['<option value="%s">%s</option>' % (k,k)
+					for k in settings['deploy']]) + BuildServer.actions
+		server.serve_forever()
+		return
 	if options.key:
 		cwd = os.getcwd()
 		ec2.create_key_pair(options.key).save(cwd)
@@ -171,10 +235,7 @@ def main(options):
 			code.interact()
 		return
 	if options.build or options.update:
-		if options.dir: source = os.path.abspath(options.dir)
-		else:
-			source = None #TODO: Checkout repo
-			error('svn not implemented')
+		source = prepare(settings, dir=options.dir)
 		env = settings['deploy'].get(options.env, None)
 		if not env: error('deploy %s not found' % options.env)
 		if options.build:
@@ -210,5 +271,8 @@ if __name__ == '__main__':
 	parser.add_option('-f', '--conf', default='./build.json',
 			help='use config file FILE [default: %default]',
 			metavar='FILE',)
+	parser.add_option('-l', '--listen',
+			help='listen for requests on port PORT',
+			metavar='PORT', type='int')
 	(kwargs, args) = parser.parse_args()
 	main(kwargs)
