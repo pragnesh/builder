@@ -28,7 +28,6 @@ def get_key(source, name):
 	return key
 
 def ssh(host, key, command):
-	import paramiko
 	client = paramiko.SSHClient()
 	client.load_system_host_keys()
 	client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -223,14 +222,11 @@ def main(options):
 		try:
 			print path('%s' % conf) + ' not found, creating'
 			while not defaults['key']:
-				sys.stdout.write(' AWS Key: ')
-				defaults['key'] = sys.stdin.readline().strip()
+				defaults['key'] = raw_input(' AWS Key: ')
 			while not defaults['secret']:
-				sys.stdout.write('  Secret: ')
-				defaults['secret'] = sys.stdin.readline().strip()
-			sys.stdout.write('SVN Repo: ')
-			defaults['repo'] = sys.stdin.readline().strip()
-			json.dump(defaults, open(conf, 'w'), indent=4)
+				defaults['secret'] = raw_input('  Secret: ')
+			defaults['repo'] = raw_input('SVN Repo: ')
+			json.dump(defaults, open(conf, 'w'), sort_keys=True, indent=4)
 			if 'EDITOR' in os.environ:
 				subprocess.call('%s %s' % (os.environ['EDITOR'], conf), shell=True)
 			if not defaults['repo']: warning('-t deployments will not work without a defined repo')
@@ -328,7 +324,7 @@ if __name__ == '__main__':
 			help='listen for requests on port PORT',
 			metavar='PORT', type='int')
 	parser.add_option('-T', '--template',
-			help='use template to build out config file',
+			help='use template file FILE to build out new config',
 			metavar='FILE')
 	(kwargs, args) = parser.parse_args()
 	main(kwargs)
