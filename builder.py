@@ -179,6 +179,8 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 			source = prepare(self.server.settings, dir=self.server.dir)
 			if action == 'Build':
 				self.server.status = 'building'
+				Background(build, self.server.reset,
+						[self.server.ec2, env, source]).start()
 			elif action == 'Update':
 				self.server.status = 'updating'
 				Background(update, self.server.reset,
