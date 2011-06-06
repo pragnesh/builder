@@ -319,7 +319,7 @@ if __name__ == '__main__':
 			help='listen for requests on port PORT',
 			metavar='PORT', type='int')
 	parser.add_option('-T', '--template',
-			help='use template to build out config file',
+			help='use template file FILE to build out new config',
 			metavar='FILE')
 	(kwargs, args) = parser.parse_args()
 	main(kwargs)
