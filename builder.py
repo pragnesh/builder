@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-import boto, datetime, json, optparse, os, os.path, subprocess, sys, time, webbrowser
-import BaseHTTPServer, urlparse #Web interface
+import datetime, json, optparse, os, os.path, subprocess, sys, time, webbrowser
+import BaseHTTPServer, threading, urlparse
+import boto, paramiko
 
 default_ami      = 'ami-1aad5273' #64-bit Ubuntu 11.04, us-east-1
 default_key_pair = 'ec2.example'
@@ -101,11 +102,24 @@ def update(ec2, env, source):
 		if 'url' in machine:
 			webbrowser.open('http://%s%s' % (machine['host'], machine['url']))
 
+<<<<<<< HEAD
 		# Image the updated instance
 		instance = get_instance(ec2, machine['host'])
 		now = datetime.datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
 		ec2.create_image(instance, '%s %s' % (machine['name'],now), 
 				description='Image of %s on %s' % (machine['name'],now))
+=======
+class Background(threading.Thread):
+	def __init__(self, fn, finish=None, args=None, kwargs=None):
+		self.fn = fn
+		self.finish = finish
+		self.args = args or []
+		self.kwargs = kwargs or {}
+		super(Background, self).__init__()
+	def run(self):
+		self.fn(*self.args, **self.kwargs)
+		if self.finish: self.finish()
+>>>>>>> cde79150e169855a02b9b4d1579f8c598ee914bd
 
 class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 	html = '''<!doctype html><html>
@@ -116,11 +130,25 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 		.updating {color:#00f;}
 		.footer {font:x-small monospace; white-space:pre-wrap;}
 		</style>
+		<script type="text/javascript">
+		window.onload = function(){
+			var timer = document.getElementById('time');
+			var time = 10;
+			setInterval(function(){
+				timer.innerText = --time;
+				if (time < 1){
+					window.location = window.location;
+					time = 0;
+				}
+			}, 1000);
+		}
+		</script>
 	</head>
 	<body>
 		<form method="POST">
 		<div>Status: <span class="%(status)s">%(status)s</span></div>
 		%(actions)s
+		<div>Refreshing in <span id="time">10</span> seconds</div>
 		</form>
 		%(fortune)s
 	</body>
@@ -137,7 +165,7 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 		self.end_headers()
 		kwargs = {'actions':'', 'status':self.server.status, 'version':VERSION}
 		try:
-			kwargs['fortune'] = '<div class="footer">%s</div>' % subprocess.check_output('fortune')
+			kwargs['fortune'] = '<hr /><div class="footer">%s</div>' % subprocess.check_output('fortune')
 		except: kwargs['fortune'] = ''
 		if self.server.status == 'waiting':
 			kwargs['actions'] = self.actions
@@ -155,9 +183,8 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 				self.server.status = 'building'
 			elif action == 'Update':
 				self.server.status = 'updating'
-				update(self.server.ec2, env, source)
-			#TODO: Output
-			self.server.status = 'waiting'
+				Background(update, self.server.reset,
+						[self.server.ec2, env, source]).start()
 
 def map(ec2):
 	keys = {}
@@ -204,10 +231,13 @@ def main(options):
 	settings = json.load(open(conf))
 	ec2 = boto.connect_ec2(settings['key'], settings['secret'])
 	if options.listen:
+		def reset(self):
+			self.status = 'waiting'
 		server = BaseHTTPServer.HTTPServer(('', options.listen), BuildServer)
 		server.dir = options.dir
 		server.settings = settings
-		server.status = 'waiting'
+		server.__class__.reset = reset #TODO: Use instance method?
+		server.reset()
 		server.ec2 = ec2
 		BuildServer.actions = '<select name="env">%s</select> ' % ''.join(
 				['<option value="%s">%s</option>' % (k,k)
