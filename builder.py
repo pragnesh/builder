@@ -102,13 +102,12 @@ def update(ec2, env, source):
 		if 'url' in machine:
 			webbrowser.open('http://%s%s' % (machine['host'], machine['url']))
 
-<<<<<<< HEAD
 		# Image the updated instance
 		instance = get_instance(ec2, machine['host'])
 		now = datetime.datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
 		ec2.create_image(instance, '%s %s' % (machine['name'],now), 
 				description='Image of %s on %s' % (machine['name'],now))
-=======
+
 class Background(threading.Thread):
 	def __init__(self, fn, finish=None, args=None, kwargs=None):
 		self.fn = fn
@@ -119,7 +118,6 @@ class Background(threading.Thread):
 	def run(self):
 		self.fn(*self.args, **self.kwargs)
 		if self.finish: self.finish()
->>>>>>> cde79150e169855a02b9b4d1579f8c598ee914bd
 
 class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 	html = '''<!doctype html><html>
@@ -212,6 +210,10 @@ def map(ec2):
 def main(options):
 	conf = os.path.abspath(options.conf)
 	if not os.path.exists(conf):
+		if options.template:
+			template = os.path.abspath(options.template)
+			if os.path.exists(template):
+				defaults.update(json.load(open(template,'r')))
 		try:
 			print path('%s' % conf) + ' not found, creating'
 			while not defaults['key']:
@@ -318,5 +320,8 @@ if __name__ == '__main__':
 	parser.add_option('-l', '--listen',
 			help='listen for requests on port PORT',
 			metavar='PORT', type='int')
+	parser.add_option('-T', '--template',
+			help='use template to build out config file',
+			metavar='FILE')
 	(kwargs, args) = parser.parse_args()
 	main(kwargs)
