@@ -164,33 +164,51 @@ def autoscale(ec2, env):
 			
 			# Create ec2 autoscaling group trigger
 			trigger_config = {
-			    'region'                 : 'us-east-1',
-			    'auto-scaling-group'     : group_name,
-			    'measure'                : 'CPUUtilization',             
+			    'measure_name'           : 'CPUUtilization',             
 			    'statistic'              : 'Average',
-			    'period'                 : '60',
-			    'lower-threshold'        : '15',
-			    'upper-threshold'        : '30',
-			    'lower-breach-increment' : '-1',
-			    'upper-breach-increment' : '2', 
-			    'breach-duration'        : '120',
 			    'unit'                   : 'Percent',
-			    'namespace'              : '"AWS/EC2"',
-			    'dimensions'             : '"AutoScalingGroupName=%s"' % group_name,
+			    'period'                 : '60',
+			    'lower_threshold'        : '15',
+			    'lower_breach_scale_increment' : '-1',
+			    'upper_threshold'        : '30',
+			    'upper_breach_scale_increment' : '2', 
+			    'breach-duration'        : '120',
+
 			}
 			trigger = autoscale.get('trigger_config',{})
+			trigger_config.update({
+				'name'                   : trigger_name,
+				'autoscale_group'        : ag,
+			    'dimensions'             : [('AutoScalingGroupName', ag.name)],
+			})
 			trigger_config.update(trigger)
-		
-			#tr = boto.ec2.autoscale.Trigger(trigger_config**)
-			#print tr
-			#ec2.create_trigger(tr)
+			tr = boto.ec2.autoscale.Trigger(trigger_config**)
+			print tr
+			ec2.create_trigger(tr)
 	
-			command = ['as-create-or-update-trigger %s' % trigger_name]
-			command_args = ['--%s=%s' % (key,trigger_config[key]) for key in trigger_config]
-			command_line = ' '.join(command+command_args)
-			
-			args = shlex.split(command_line)
-			retcode = subprocess.call(args)
+			#trigger_config = {
+			#    'region'                 : 'us-east-1',
+			#    'auto-scaling-group'     : group_name,
+			#    'measure'                : 'CPUUtilization',             
+			#    'statistic'              : 'Average',
+			#    'period'                 : '60',
+			#    'lower-threshold'        : '15',
+			#    'upper-threshold'        : '30',
+			#    'lower-breach-increment' : '-1',
+			#    'upper-breach-increment' : '2', 
+			#    'breach-duration'        : '120',
+			#    'unit'                   : 'Percent',
+			#    'namespace'              : '"AWS/EC2"',
+			#    'dimensions'             : '"AutoScalingGroupName=%s"' % group_name,
+			#}
+			#trigger = autoscale.get('trigger_config',{})
+			#trigger_config.update(trigger)
+			#command = ['as-create-or-update-trigger %s' % trigger_name]
+			#command_args = ['--%s=%s' % (key,trigger_config[key]) for key in trigger_config]
+			#command_line = ' '.join(command+command_args)
+			#
+			#args = shlex.split(command_line)
+			#retcode = subprocess.call(args)
 
 class Background(threading.Thread):
 	def __init__(self, fn, finish=None, args=None, kwargs=None):
