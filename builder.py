@@ -129,30 +129,31 @@ def update(ec2, env, source):
 def load_balance(elb, env):
 	for machine in env:
 		if 'load_balancers' in machine.keys():
-			print 'Load Balancing machines'
 			lb_list = [lb.name for lb in elb.get_all_load_balancers()]
 			for load_balancer in machine['load_balancers']:
-
 				# Set the defaults
 				availability_zones = machine.get('availability_zones',['us-east-1a', 'us-east-1c', 'us-east-1d'])
 				lb_name            = load_balancer.get('name',{})
 				lb_listeners       = load_balancer.get('listeners',[(80, 80, 'http')])
 				health_check       = load_balancer.get('health_check',{})
-				health_name        = health_check.get('name','instance_health')
-				health_interval    = health_check.get('interval', 20)
-				health_target      = health_check.get('target', 'HTTP:80/')
 
 				# Create a health check for the load balancer
-				hc = boto.ec2.elb.HealthCheck(health_name, interval=health_interval, target=health_target)
+				hc = boto.ec2.elb.HealthCheck(
+						health_check.get('name','instance_health'),
+						interval            = health_check.get('interval', 20),
+						target              = health_check.get('target', 'HTTP:80/'),
+						healthy_threshold   = health_check.get('healthy_threshold',2),
+						timeout             = health_check.get('timeout',5),
+						unhealthy_threshold = health_check.get('unhealthy_threshold',5),
+						)
 
 				# Create the load balancer if it does not exist
-				print lb_name, lb_list
 				if lb_name not in lb_list:
 					new_lb = elb.create_load_balancer(lb_name, availability_zones, lb_listeners)
 					new_lb.configure_health_check(hc)
-					print new_lb
+					print 'Creating load balancer ', new_lb
 
-def autoscale(ec2, elb, env):
+def autoscale(ec2, env):
 	for machine in env:
 		if 'autoscale' in machine.keys():
 			print 'Autoscaling %s' % machine['name']
@@ -167,7 +168,7 @@ def autoscale(ec2, elb, env):
 			max_size           = autoscale.get('max_size','4')
 
 			availability_zones = machine.get('availability_zones',['us-east-1a', 'us-east-1c', 'us-east-1d'])
-			load_balancers     = machine.get('load_balancers',[])
+			load_balancers     = [lb.name for lb in machine.get('load_balancers',[])]
 
 			# Create ec2 launch configuration
 			lc = boto.ec2.autoscale.LaunchConfiguration(      
@@ -436,8 +437,9 @@ def main(options):
 			if res and res.lower()[0] == 'y':
 				build(ec2, env, source)
 			else: print "Not building servers"
-		load_balance(elb, env)
 		update(ec2, env, source)
+		load_balance(elb, env)
+		autoscale(ec2, elb, env)
 		json.dump(settings, open(conf, 'w'), indent=4)
 
 if __name__ == '__main__':
