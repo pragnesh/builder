@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import datetime, json, optparse, os, os.path, subprocess, sys, time, webbrowser
-import BaseHTTPServer, threading, urlparse
+import BaseHTTPServer, tempfile, threading, urlparse
 import boto, paramiko
 
 default_ami      = 'ami-1aad5273' #64-bit Ubuntu 11.04, us-east-1
@@ -40,11 +40,14 @@ def ssh(host, key, command):
 #def ssh(host, key, command):
 #	subprocess.call('ssh -i %s ubuntu@%s "%s"' % (key, host, command), shell=True)
 
-def prepare(settings, dir):
+def prepare(settings, dir=None, tag=None):
 	if dir: source = os.path.abspath(dir)
 	else:
-		source = None #TODO: Checkout repo
-		error('svn not implemented')
+		source = tempfile.mkdtemp(prefix='builder.%s.' %
+				settings['repo'].split('/')[-2])
+		if tag not in ('trunk', ''): tag = 'tags/%s' % tag
+		subprocess.call('svn co %s%s %s' %
+				(settings['repo'], tag, source), shell=True)
 	return source
 
 def get_instance(ec2, hostname):
@@ -175,7 +178,8 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 			post = urlparse.parse_qs(self.rfile.readline())
 			action = post['action'][0]
 			env = self.server.settings['deploy'][post['env'][0]]
-			source = prepare(self.server.settings, dir=self.server.dir)
+			tag = self.server.tag #TODO: Make choosable?
+			source = prepare(self.server.settings, dir=self.server.dir, tag=tag)
 			if action == 'Build':
 				self.server.status = 'building'
 				Background(build, self.server.reset,
@@ -235,6 +239,7 @@ def main(options):
 			self.status = 'waiting'
 		server = BaseHTTPServer.HTTPServer(('', options.listen), BuildServer)
 		server.dir = options.dir
+		server.tag = options.tag
 		server.settings = settings
 		server.__class__.reset = reset #TODO: Use instance method?
 		server.reset()
@@ -279,7 +284,7 @@ def main(options):
 			code.interact()
 		return
 	if options.build or options.update:
-		source = prepare(settings, dir=options.dir)
+		source = prepare(settings, dir=options.dir, tag=options.tag)
 		env = settings['deploy'].get(options.env, None)
 		if not env: error('deploy %s not found' % options.env)
 		if options.build:
@@ -307,8 +312,8 @@ if __name__ == '__main__':
 	parser.add_option('-e', '--env', default='default',
 			help='uses deploy ENV [default: %default]',
 			metavar='ENV',)
-	parser.add_option('-t', '--tag', default='latest',
-			help='uses tag TAG, latest, or trunk [default: %default]',
+	parser.add_option('-t', '--tag', default='trunk',
+			help='uses tag TAG or trunk [default: %default]',
 			metavar='TAG',)
 	parser.add_option('-d', '--dir', help='uses dir DIR instead of --tag',
 			metavar='DIR',)
