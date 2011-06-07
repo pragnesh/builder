@@ -14,7 +14,7 @@ setup(
 	description  = """ A tool to build and deploy onto Amazon EC2 servers """,
 
 	long_description = open('README.markdown').read(),
-	install_requires = ['boto','paramiko',],
+	install_requires = ['boto==2.0b4','paramiko',],
 
 	classifiers  = (
 		'Development Status :: 3 - Alpha',
