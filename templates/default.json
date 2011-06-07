@@ -8,7 +8,7 @@
                 ], 
                 "base": "ami-1aad5273", 
                 "key_pair": "ec2.example", 
-                "name": "examplee", 
+                "name": "default example", 
                 "groups": [
                     "default"
                 ], 
