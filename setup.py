@@ -3,6 +3,7 @@ from distutils.core import setup
 setup(
 	name         = 'builder',
 	packages     = ['builder',],
+	scripts      = ['builder',],
 	version      = 'v0.0.1',
 	author       = 'RED Interactive Agency',
 	author_email = 'geeks@ff0000.com',
