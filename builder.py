@@ -153,7 +153,7 @@ def load_balance(elb, env):
 					new_lb.configure_health_check(hc)
 					print 'Creating load balancer ', new_lb
 
-def autoscale(ec2, env):
+def autoscale(asc, env):
 	for machine in env:
 		if 'autoscale' in machine.keys():
 			print 'Autoscaling %s' % machine['name']
@@ -168,20 +168,22 @@ def autoscale(ec2, env):
 			max_size           = autoscale.get('max_size','4')
 
 			availability_zones = machine.get('availability_zones',['us-east-1a', 'us-east-1c', 'us-east-1d'])
-			load_balancers     = [lb.name for lb in machine.get('load_balancers',[])]
+			load_balancers     = [lb['name'] for lb in machine.get('load_balancers',[]) if 'name' in lb]
 
 			# Create ec2 launch configuration
-			lc = boto.ec2.autoscale.LaunchConfiguration(      
+			from boto.ec2.autoscale import LaunchConfiguration
+			lc = LaunchConfiguration(      
 			            name            = launch_config_name,           
 			            image_id        = machine['image'],     
-			            key_name        = machine['key_name'],
+			            key_name        = machine['key_pair'],
 			            instance_type   = machine['size'],   
 			            security_groups = machine['groups'])
 			print lc
-			ec2.create_launch_configuration(lc)
+			asc.create_launch_configuration(lc)
 
 			# Create ec2 autoscaling group 
-			ag = boto.ec2.autoscale.AutoScalingGroup(
+			from boto.ec2.autoscale import AutoScalingGroup
+			ag = AutoScalingGroup(
 			            group_name         = group_name, 
 			            load_balancers     = load_balancers,
 			            availability_zones = availability_zones,
@@ -189,7 +191,7 @@ def autoscale(ec2, env):
 			            min_size           = min_size,
 			            max_size           = max_size)
 			print ag
-			ec2.create_auto_scaling_group(ag)
+			asc.create_auto_scaling_group(ag)
 			
 			# Create ec2 autoscaling group trigger
 			trigger_config = {
@@ -211,9 +213,10 @@ def autoscale(ec2, env):
 
 			}
 			trigger_config.update(autoscale.get('trigger_config',{}))
-			tr = boto.ec2.autoscale.Trigger(**trigger_config)
+			from boto.ec2.autoscale import Trigger
+			tr = Trigger(**trigger_config)
 			print tr
-			ec2.create_trigger(tr)
+			asc.create_trigger(tr)
 	
 			#trigger_config = {
 			#    'region'                 : 'us-east-1',
@@ -371,6 +374,7 @@ def main(options):
 	settings = json.load(open(conf))
 	ec2 = boto.connect_ec2(settings['key'], settings['secret'])
 	elb = boto.connect_elb(settings['key'], settings['secret'])
+	asc = boto.connect_autoscale(settings['key'], settings['secret'])
 	if options.listen:
 		def reset(self):
 			self.status = 'waiting'
@@ -438,8 +442,10 @@ def main(options):
 				build(ec2, env, source)
 			else: print "Not building servers"
 		update(ec2, env, source)
+		json.dump(settings, open(conf, 'w'), indent=4)
+		
 		load_balance(elb, env)
-		autoscale(ec2, elb, env)
+		autoscale(asc, env)
 		json.dump(settings, open(conf, 'w'), indent=4)
 
 if __name__ == '__main__':
