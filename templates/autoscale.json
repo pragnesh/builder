@@ -2,17 +2,10 @@
     "deploy": {
         "default": [
             {
-                "autoscalinggroup": {
-                    "availability_zones": [
-                        "us-east-1a", 
-                        "us-east-1c", 
-                        "us-east-1d"
-                    ], 
-                    "max_size": "64", 
-                    "min_size": "4"
+                "autoscale": {
+					"name": "autoscale_name"
                 }, 
                 "base": "ami-1aad5273", 
-                "group_name": "group_name_example", 
                 "groups": [
                     "default"
                 ], 
@@ -21,24 +14,11 @@
                     "sudo apt-get -y install python-virtualenv"
                 ], 
                 "key_pair": "ec2.example", 
-                "launch_config": "launch_config_name", 
                 "load_balancers": [
                     "example-lb"
                 ], 
                 "name": "default example", 
                 "size": "t1.micro", 
-                "trigger_config": {
-                    "breach-duration": "120", 
-                    "lower-breach-increment": "-2", 
-                    "lower-threshold": "15", 
-                    "measure": "CPUUtilization", 
-                    "namespace": "'AWS/EC2'", 
-                    "period": "60", 
-                    "statistic": "Average", 
-                    "unit": "Percent", 
-                    "upper-breach-increment": "8", 
-                    "upper-threshold": "30"
-                }, 
                 "update": [], 
                 "url": "/"
             }

@@ -123,8 +123,74 @@ def update(ec2, env, source):
 		# Image the updated instance
 		instance = get_instance(ec2, machine['host'])
 		now = datetime.datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
-		ec2.create_image(instance.id, '%s %s' % (machine['name'],now), 
+		machine['image'] = ec2.create_image(instance.id, '%s %s' % (machine['name'],now), 
 				description='Image of %s on %s' % (machine['name'],now))
+
+def autoscale(ec2, env):
+	for machine in env:
+		if 'autoscale' in machine.keys():
+			print 'Autoscaling %s' % machine['name']
+			autoscale = machine['autoscale']
+
+			# Set defaults
+			autoscale_name     = autoscale.get('name','_'.join(machine['name'].split()))
+			launch_config_name = autoscale.get('launch_config_name','launch_config_%s' % autoscale_name)
+			group_name         = autoscale.get('group_name','group_%s' % autoscale_name)
+			trigger_name       = autoscale.get('trigger_name','trigger_%s' % autoscale_name)
+			availability_zones = autoscale.get('availability_zones',['us-east-1a', 'us-east-1c', 'us-east-1d'])
+			min_size           = autoscale.get('min_size','1')
+			max_size           = autoscale.get('max_size','4')
+
+			# Create ec2 launch configuration
+			lc = boto.ec2.autoscale.LaunchConfiguration(      
+			            name            = launch_config_name),           
+			            image_id        = machine['image'],     
+			            key_name        = machine['key_name']     
+			            instance_type   = machine['size'],   
+			            security_groups = machine['groups'])
+			print lc
+			ec2.create_launch_configuration(lc)
+			
+			# Create ec2 autoscaling group 
+			ag = boto.ec2.autoscale.AutoScalingGroup(
+			            group_name         = group_name, 
+			            load_balancers     = machine['load_balancers'],
+			            availability_zones = availability_zones,
+			            launch_config      = lc,
+			            min_size           = min_size,
+			            max_size           = max_size)
+			print ag
+			ec2.create_auto_scaling_group(ag)
+			
+			# Create ec2 autoscaling group trigger
+			trigger_config = {
+			    'region'                 : 'us-east-1',
+			    'auto-scaling-group'     : group_name,
+			    'measure'                : 'CPUUtilization',             
+			    'statistic'              : 'Average',
+			    'period'                 : '60',
+			    'lower-threshold'        : '15',
+			    'upper-threshold'        : '30',
+			    'lower-breach-increment' : '-1',
+			    'upper-breach-increment' : '2', 
+			    'breach-duration'        : '120',
+			    'unit'                   : 'Percent',
+			    'namespace'              : '"AWS/EC2"',
+			    'dimensions'             : '"AutoScalingGroupName=%s"' % group_name,
+			}
+			trigger = autoscale.get('trigger_config',{})
+			trigger_config.update(trigger)
+		
+			#tr = boto.ec2.autoscale.Trigger(trigger_config**)
+			#print tr
+			#ec2.create_trigger(tr)
+	
+			command = ['as-create-or-update-trigger %s' % trigger_name]
+			command_args = ['--%s=%s' % (key,trigger_config[key]) for key in trigger_config]
+			command_line = ' '.join(command+command_args)
+			
+			args = shlex.split(command_line)
+			retcode = subprocess.call(args)
 
 class Background(threading.Thread):
 	def __init__(self, fn, finish=None, args=None, kwargs=None):
@@ -308,9 +374,9 @@ def main(options):
 			res = raw_input('Create %s server%s [y/N]? ' % (n, n>1 and 's' or ''))
 			if res and res.lower()[0] == 'y':
 				build(ec2, env, source)
-				json.dump(settings, open(conf, 'w'), indent=4)
 			else: print "Not building servers"
 		update(ec2, env, source)
+		json.dump(settings, open(conf, 'w'), indent=4)
 
 if __name__ == '__main__':
 	# Command line parser
