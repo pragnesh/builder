@@ -73,6 +73,7 @@ def get_instance(ec2, hostname):
 	return None
 
 def build(ec2, env, source):
+	print 'Building servers'
 	if isinstance(env, dict): env=[env]
 	for machine in env:
 		image = ec2.get_image(machine['base'])
@@ -103,6 +104,7 @@ def build(ec2, env, source):
 			ssh(machine['host'], key, command)
 
 def update(ec2, env, source):
+	print 'Updating servers'
 	for machine in env:
 		key = get_key(source, machine['key_pair'])
 		if 'host' not in machine: error('%s has no host entry' % machine['name'])
@@ -303,12 +305,11 @@ def main(options):
 		if not env: error('deploy %s not found' % options.env)
 		if options.build:
 			n = 1 #TODO: Calculate number of new servers
-			res = raw_input('Create %s server%s? ' % (n, n>1 and 's' or ''))
-			#sys.stdout.write('Create %s server%s? ' % (n, n>1 and 's' or ''))
-			#res = sys.stdin.readline()
-			if res.lower()[0] == 'y':
+			res = raw_input('Create %s server%s [y/N]? ' % (n, n>1 and 's' or ''))
+			if res and res.lower()[0] == 'y':
 				build(ec2, env, source)
 				json.dump(settings, open(conf, 'w'), indent=4)
+			else: print "Not building servers"
 		update(ec2, env, source)
 
 if __name__ == '__main__':
