@@ -164,24 +164,24 @@ def autoscale(ec2, env):
 			
 			# Create ec2 autoscaling group trigger
 			trigger_config = {
+				# Probably NOT a good idea to update these int he config
+				'name'                   : trigger_name,
+				'autoscale_group'        : ag,
+			    'dimensions'             : [('AutoScalingGroupName', ag.name)],
+
+				# These are fine to update in the config
 			    'measure_name'           : 'CPUUtilization',             
 			    'statistic'              : 'Average',
 			    'unit'                   : 'Percent',
 			    'period'                 : '60',
-			    'lower_threshold'        : '15',
-			    'lower_breach_scale_increment' : '-1',
-			    'upper_threshold'        : '30',
-			    'upper_breach_scale_increment' : '2', 
 			    'breach-duration'        : '120',
+			    'lower_threshold'        : '15',
+			    'upper_threshold'        : '30',
+			    'lower_breach_scale_increment' : '-1',
+			    'upper_breach_scale_increment' : '2', 
 
 			}
-			trigger = autoscale.get('trigger_config',{})
-			trigger_config.update({
-				'name'                   : trigger_name,
-				'autoscale_group'        : ag,
-			    'dimensions'             : [('AutoScalingGroupName', ag.name)],
-			})
-			trigger_config.update(trigger)
+			trigger_config.update(autoscale.get('trigger_config',{}))
 			tr = boto.ec2.autoscale.Trigger(trigger_config**)
 			print tr
 			ec2.create_trigger(tr)
