@@ -146,6 +146,7 @@ def load_balance(elb, env):
 				hc = boto.ec2.elb.HealthCheck(health_name, interval=health_interval, target=health_target)
 
 				# Create the load balancer if it does not exist
+				print lb_name, lb_list
 				if lb_name not in lb_list:
 					new_lb = elb.create_load_balancer(lb_name, availability_zones, lb_listeners)
 					new_lb.configure_health_check(hc)
@@ -400,12 +401,13 @@ def main(options):
 			for k2, v2 in v.iteritems():
 				print '\t\t', k2
 				for g in v2: print '\t\t\t', g
-		print
-		print 'Elastic Load Balancers:'
-		for k, v in elbs.iteritems():
-			print '\t', k
-			for k2, v2 in v.iteritems():
-				print '\t\t', k2, '\t', v2
+		if elbs:
+			print
+			print 'Elastic Load Balancers:'
+			for k, v in elbs.iteritems():
+				print '\t', k
+				for k2, v2 in v.iteritems():
+					print '\t\t', k2, '\t', v2
 		print
 		print 'Instances:'
 		for k, v in instances.iteritems():
