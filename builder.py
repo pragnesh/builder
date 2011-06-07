@@ -126,20 +126,47 @@ def update(ec2, env, source):
 		machine['image'] = ec2.create_image(instance.id, '%s %s' % (machine['name'],now), 
 				description='Image of %s on %s' % (machine['name'],now))
 
-def autoscale(ec2, env):
+def load_balance(elb, env):
+	for machine in env:
+		if 'load_balancers' in machine.keys():
+			print 'Load Balancing machines'
+			lb_list = [lb.name for lb in elb.get_all_load_balancers()]
+			for load_balancer in machine['load_balancers']:
+
+				# Set the defaults
+				availability_zones = machine.get('availability_zones',['us-east-1a', 'us-east-1c', 'us-east-1d'])
+				lb_name            = load_balancer.get('name',{})
+				lb_listeners       = load_balancer.get('listeners',[(80, 80, 'http')])
+				health_check       = load_balancer.get('health_check',{})
+				health_name        = health_check.get('name','instance_health')
+				health_interval    = health_check.get('interval', 20)
+				health_target      = health_check.get('target', 'HTTP:80/')
+
+				# Create a health check for the load balancer
+				hc = boto.ec2.elb.HealthCheck(health_name, interval=health_interval, target=health_target)
+
+				# Create the load balancer if it does not exist
+				if lb_name not in lb_list:
+					new_lb = elb.create_load_balancer(lb_name, availability_zones, lb_listeners)
+					new_lb.configure_health_check(hc)
+					print new_lb
+
+def autoscale(ec2, elb, env):
 	for machine in env:
 		if 'autoscale' in machine.keys():
 			print 'Autoscaling %s' % machine['name']
 			autoscale = machine['autoscale']
 
-			# Set defaults
+			# Set the defaults
 			autoscale_name     = autoscale.get('name','_'.join(machine['name'].split()))
 			launch_config_name = autoscale.get('launch_config_name','launch_config_%s' % autoscale_name)
 			group_name         = autoscale.get('group_name','group_%s' % autoscale_name)
 			trigger_name       = autoscale.get('trigger_name','trigger_%s' % autoscale_name)
-			availability_zones = autoscale.get('availability_zones',['us-east-1a', 'us-east-1c', 'us-east-1d'])
 			min_size           = autoscale.get('min_size','1')
 			max_size           = autoscale.get('max_size','4')
+
+			availability_zones = machine.get('availability_zones',['us-east-1a', 'us-east-1c', 'us-east-1d'])
+			load_balancers     = machine.get('load_balancers',[])
 
 			# Create ec2 launch configuration
 			lc = boto.ec2.autoscale.LaunchConfiguration(      
@@ -150,11 +177,11 @@ def autoscale(ec2, env):
 			            security_groups = machine['groups'])
 			print lc
 			ec2.create_launch_configuration(lc)
-			
+
 			# Create ec2 autoscaling group 
 			ag = boto.ec2.autoscale.AutoScalingGroup(
 			            group_name         = group_name, 
-			            load_balancers     = machine['load_balancers'],
+			            load_balancers     = load_balancers,
 			            availability_zones = availability_zones,
 			            launch_config      = lc,
 			            min_size           = min_size,
@@ -289,7 +316,7 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 				Background(update, self.server.reset,
 						[self.server.ec2, env, source]).start()
 
-def map(ec2):
+def map(ec2, elb):
 	keys = {}
 	for k in ec2.get_all_key_pairs():
 		keys[k.name] = k.fingerprint
@@ -302,6 +329,13 @@ def map(ec2):
 			rules[g].append('%s:[%s%s]' % (r.ip_protocol, r.from_port,
 				r.to_port != r.from_port and '-'+r.to_port or ''))
 		groups[s.name] = rules
+	elbs = {}
+	for elb in elb.get_all_load_balancers():
+		info = {}
+		info['instances'] = elb.instances
+		info['dns_name']       = elb.dns_name
+		elbs[elb.name] = info
+		
 	instances = {}
 	for r in ec2.get_all_instances():
 		for i in r.instances:
@@ -310,7 +344,7 @@ def map(ec2):
 			if i.state not in instances[i.image_id]:
 				instances[i.image_id][i.state] = []
 			instances[i.image_id][i.state].append(i)
-	return keys, groups, instances
+	return keys, groups, elbs, instances
 
 def main(options):
 	conf = os.path.abspath(options.conf)
@@ -334,6 +368,7 @@ def main(options):
 			error('conf file creation interrupted')
 	settings = json.load(open(conf))
 	ec2 = boto.connect_ec2(settings['key'], settings['secret'])
+	elb = boto.connect_elb(settings['key'], settings['secret'])
 	if options.listen:
 		def reset(self):
 			self.status = 'waiting'
@@ -354,7 +389,7 @@ def main(options):
 		ec2.create_key_pair(options.key).save(cwd)
 		print 'Generated %s' % path(os.path.join(cwd, '%s.pem'%options.key))
 	if options.map:
-		keys, groups, instances = map(ec2)
+		keys, groups, elbs, instances = map(ec2, elb)
 		print 'Key Pairs:'
 		for k, v in keys.iteritems():
 			print '\t', k, '\t', v
@@ -365,6 +400,12 @@ def main(options):
 			for k2, v2 in v.iteritems():
 				print '\t\t', k2
 				for g in v2: print '\t\t\t', g
+		print
+		print 'Elastic Load Balancers:'
+		for k, v in elbs.iteritems():
+			print '\t', k
+			for k2, v2 in v.iteritems():
+				print '\t\t', k2, '\t', v2
 		print
 		print 'Instances:'
 		for k, v in instances.iteritems():
@@ -393,6 +434,7 @@ def main(options):
 			if res and res.lower()[0] == 'y':
 				build(ec2, env, source)
 			else: print "Not building servers"
+		load_balance(elb, env)
 		update(ec2, env, source)
 		json.dump(settings, open(conf, 'w'), indent=4)
 
