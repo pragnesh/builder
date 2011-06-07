@@ -430,13 +430,18 @@ def main(options):
 			else: print "Not building servers"
 		update(ec2, env, source)
 		json.dump(settings, open(conf, 'w'), indent=4)
-		
+	
+		# Load Balance Machines and Autoscale Machines
 		load_balance(elb, env)
 		autoscale(asc, env)
-		if 'autoscale' in env and 'load_balancer' in env:
-			get_instance(ec2, env['host']).terminate()
-			env['host'] = env['load_balancer']['host']
-			
+
+		# Clean up after autoscaling
+		for machine in env:
+			print 'autoscale' in machine, 'load_balancer' in machine
+			if 'autoscale' in machine and 'load_balancer' in machine:
+				get_instance(ec2, machine['host']).terminate()
+				env['host'] = env['load_balancer']['host']
+				
 		json.dump(settings, open(conf, 'w'), indent=4)
 
 if __name__ == '__main__':
