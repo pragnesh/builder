@@ -132,30 +132,32 @@ def update(ec2, env, source):
 
 def load_balance(elb, env):
 	for machine in env:
-		if 'load_balancers' in machine.keys():
+		if 'load_balancer' in machine.keys():
 			lb_list = [lb.name for lb in elb.get_all_load_balancers()]
-			for load_balancer in machine['load_balancers']:
-				# Set the defaults
-				availability_zones = machine.get('availability_zones',['us-east-1a', 'us-east-1c', 'us-east-1d'])
-				lb_name            = load_balancer.get('name',{})
-				lb_listeners       = load_balancer.get('listeners',[(80, 80, 'http')])
-				health_check       = load_balancer.get('health_check',{})
+			load_balancer = machine['load_balancer']
+			
+			# Set the defaults
+			availability_zones = machine.get('availability_zones',['us-east-1a', 'us-east-1c', 'us-east-1d'])
+			lb_name            = load_balancer.get('name',{})
+			lb_listeners       = load_balancer.get('listeners',[(80, 80, 'http')])
+			health_check       = load_balancer.get('health_check',{})
 
-				# Create a health check for the load balancer
-				hc = boto.ec2.elb.HealthCheck(
-						health_check.get('name','instance_health'),
-						interval            = health_check.get('interval', 20),
-						target              = health_check.get('target', 'HTTP:80/'),
-						healthy_threshold   = health_check.get('healthy_threshold',2),
-						timeout             = health_check.get('timeout',5),
-						unhealthy_threshold = health_check.get('unhealthy_threshold',5),
-						)
+			# Create a health check for the load balancer
+			hc = boto.ec2.elb.HealthCheck(
+					health_check.get('name','instance_health'),
+					interval            = health_check.get('interval', 20),
+					target              = health_check.get('target', 'HTTP:80/'),
+					healthy_threshold   = health_check.get('healthy_threshold',2),
+					timeout             = health_check.get('timeout',5),
+					unhealthy_threshold = health_check.get('unhealthy_threshold',5),
+					)
 
-				# Create the load balancer if it does not exist
-				if lb_name not in lb_list:
-					new_lb = elb.create_load_balancer(lb_name, availability_zones, lb_listeners)
-					new_lb.configure_health_check(hc)
-					print 'Creating load balancer ', new_lb
+			# Create the load balancer if it does not exist
+			if lb_name not in lb_list:
+				new_lb = elb.create_load_balancer(lb_name, availability_zones, lb_listeners)
+				new_lb.configure_health_check(hc)
+				print 'Creating load balancer ', new_lb
+				machine['load_balancer']['host'] = new_lb.dns_name
 
 def autoscale(asc, env):
 	for machine in env:
@@ -172,7 +174,7 @@ def autoscale(asc, env):
 			max_size           = autoscale.get('max_size','4')
 
 			availability_zones = machine.get('availability_zones',['us-east-1a', 'us-east-1c', 'us-east-1d'])
-			load_balancers     = [lb['name'] for lb in machine.get('load_balancers',[]) if 'name' in lb]
+			load_balancers     = [machine.get('load_balancer',{}).get('name')]
 
 			# Create ec2 launch configuration
 			lc = LaunchConfiguration(      
@@ -205,7 +207,7 @@ def autoscale(asc, env):
 			    'statistic'              : 'Average',
 			    'unit'                   : 'Percent',
 			    'period'                 : '60',
-			    'breach-duration'        : '120',
+			    'breach_duration'        : '120',
 			    'lower_threshold'        : '15',
 			    'upper_threshold'        : '30',
 			    'lower_breach_scale_increment' : '-1',
@@ -214,32 +216,7 @@ def autoscale(asc, env):
 			}
 			trigger_config.update(autoscale.get('trigger_config',{}))
 			tr = Trigger(**trigger_config)
-			print tr
 			asc.create_trigger(tr)
-	
-			#trigger_config = {
-			#    'region'                 : 'us-east-1',
-			#    'auto-scaling-group'     : group_name,
-			#    'measure'                : 'CPUUtilization',             
-			#    'statistic'              : 'Average',
-			#    'period'                 : '60',
-			#    'lower-threshold'        : '15',
-			#    'upper-threshold'        : '30',
-			#    'lower-breach-increment' : '-1',
-			#    'upper-breach-increment' : '2', 
-			#    'breach-duration'        : '120',
-			#    'unit'                   : 'Percent',
-			#    'namespace'              : '"AWS/EC2"',
-			#    'dimensions'             : '"AutoScalingGroupName=%s"' % group_name,
-			#}
-			#trigger = autoscale.get('trigger_config',{})
-			#trigger_config.update(trigger)
-			#command = ['as-create-or-update-trigger %s' % trigger_name]
-			#command_args = ['--%s=%s' % (key,trigger_config[key]) for key in trigger_config]
-			#command_line = ' '.join(command+command_args)
-			#
-			#args = shlex.split(command_line)
-			#retcode = subprocess.call(args)
 
 class Background(threading.Thread):
 	def __init__(self, fn, finish=None, args=None, kwargs=None):
@@ -321,9 +298,12 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 						[self.server.ec2, env, source]).start()
 
 def map(ec2, elb):
+	# EC2 Keypairs
 	keys = {}
 	for k in ec2.get_all_key_pairs():
 		keys[k.name] = k.fingerprint
+	
+	# EC2 Security Groups
 	groups = {}
 	for s in ec2.get_all_security_groups():
 		rules = {}
@@ -333,13 +313,21 @@ def map(ec2, elb):
 			rules[g].append('%s:[%s%s]' % (r.ip_protocol, r.from_port,
 				r.to_port != r.from_port and '-'+r.to_port or ''))
 		groups[s.name] = rules
+	
+	# Elastic Load Balancers
 	elbs = {}
 	for elb in elb.get_all_load_balancers():
 		info = {}
 		info['instances'] = elb.instances
-		info['dns_name']       = elb.dns_name
+		info['dns_name']  = elb.dns_name
 		elbs[elb.name] = info
-		
+
+	# Need to map out
+	# * Launch Configurations
+	# * AutoScaling Groups
+	# * AutoScaling Triggers and Instances
+
+	# EC2 Instances
 	instances = {}
 	for r in ec2.get_all_instances():
 		for i in r.instances:
@@ -445,6 +433,10 @@ def main(options):
 		
 		load_balance(elb, env)
 		autoscale(asc, env)
+		if 'autoscale' in env and 'load_balancer' in env:
+			get_instance(ec2, env['host']).terminate()
+			env['host'] = env['load_balancer']['host']
+			
 		json.dump(settings, open(conf, 'w'), indent=4)
 
 if __name__ == '__main__':

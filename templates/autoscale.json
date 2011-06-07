@@ -14,9 +14,9 @@
                     "sudo apt-get -y install python-virtualenv"
                 ], 
                 "key_pair": "ec2.example", 
-                "load_balancers": [
-                    "example-lb"
-                ], 
+                "load_balancers": {
+                    "name": "example-lb"
+                }, 
                 "name": "default example", 
                 "size": "t1.micro", 
                 "update": [], 
