@@ -19,10 +19,20 @@ defaults = {'key':None, 'secret':None, 'repo':None, 'deploy':{
 }}
 def error(message):
 	sys.exit('%s %s' % (alert('\nerror:'), message))
+
 def warning(message):
 	print alert('warning:'), message
 
 def get_key(source, name):
+	""" 
+	Return the path to the key file given a source directory and keyname.
+	
+	This method will always assume that the key exists in the deploy folder
+	of the source directory.
+
+	This method will always ensure that the key has proper permissions for SSH.
+	"""
+
 	key = os.path.join(source, 'deploy', '%s.pem' % name)
 	if not os.path.exists(key):
 		error('key [%s] not found at %s, aborting' % (name, path(key)))
