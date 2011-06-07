@@ -121,7 +121,7 @@ def update(ec2, env, source):
 		# Image the updated instance
 		instance = get_instance(ec2, machine['host'])
 		now = datetime.datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
-		ec2.create_image(instance, '%s %s' % (machine['name'],now), 
+		ec2.create_image(instance.id, '%s %s' % (machine['name'],now), 
 				description='Image of %s on %s' % (machine['name'],now))
 
 class Background(threading.Thread):
