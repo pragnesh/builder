@@ -2,7 +2,11 @@
 import datetime, json, optparse, os, os.path, subprocess, sys, time, webbrowser
 from stat import S_IMODE
 import BaseHTTPServer, tempfile, threading, urlparse
+
 import boto, paramiko
+from boto.ec2.autoscale import LaunchConfiguration
+from boto.ec2.autoscale import AutoScalingGroup
+from boto.ec2.autoscale import Trigger
 
 default_ami      = 'ami-1aad5273' #64-bit Ubuntu 11.04, us-east-1
 default_key_pair = 'ec2.example'
@@ -171,18 +175,15 @@ def autoscale(asc, env):
 			load_balancers     = [lb['name'] for lb in machine.get('load_balancers',[]) if 'name' in lb]
 
 			# Create ec2 launch configuration
-			from boto.ec2.autoscale import LaunchConfiguration
 			lc = LaunchConfiguration(      
 			            name            = launch_config_name,           
 			            image_id        = machine['image'],     
 			            key_name        = machine['key_pair'],
 			            instance_type   = machine['size'],   
 			            security_groups = machine['groups'])
-			print lc
 			asc.create_launch_configuration(lc)
 
 			# Create ec2 autoscaling group 
-			from boto.ec2.autoscale import AutoScalingGroup
 			ag = AutoScalingGroup(
 			            group_name         = group_name, 
 			            load_balancers     = load_balancers,
@@ -190,7 +191,6 @@ def autoscale(asc, env):
 			            launch_config      = lc,
 			            min_size           = min_size,
 			            max_size           = max_size)
-			print ag
 			asc.create_auto_scaling_group(ag)
 			
 			# Create ec2 autoscaling group trigger
@@ -213,7 +213,6 @@ def autoscale(asc, env):
 
 			}
 			trigger_config.update(autoscale.get('trigger_config',{}))
-			from boto.ec2.autoscale import Trigger
 			tr = Trigger(**trigger_config)
 			print tr
 			asc.create_trigger(tr)
