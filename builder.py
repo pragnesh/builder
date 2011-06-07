@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import datetime, json, optparse, os, os.path, subprocess, sys, time, webbrowser
+from stat import S_IMODE
 import BaseHTTPServer, tempfile, threading, urlparse
 import boto, paramiko
 
@@ -25,6 +26,9 @@ def get_key(source, name):
 	key = os.path.join(source, 'deploy', '%s.pem' % name)
 	if not os.path.exists(key):
 		error('key [%s] not found at %s, aborting' % (name, path(key)))
+	mode = oct(S_IMODE(os.stat(key).st_mode))
+	if mode not in ['0600','0400']:
+		error('key [%s] with perms %s must have 0600 or 0400, aborting' % (name,mode))
 	return key
 
 def ssh(host, key, command):
@@ -289,8 +293,9 @@ def main(options):
 		if not env: error('deploy %s not found' % options.env)
 		if options.build:
 			n = 1 #TODO: Calculate number of new servers
-			sys.stdout.write('Create %s server%s? ' % (n, n>1 and 's' or ''))
-			res = sys.stdin.readline()
+			res = raw_input('Create %s server%s? ' % (n, n>1 and 's' or ''))
+			#sys.stdout.write('Create %s server%s? ' % (n, n>1 and 's' or ''))
+			#res = sys.stdin.readline()
 			if res.lower()[0] == 'y':
 				build(ec2, env, source)
 				json.dump(settings, open(conf, 'w'), indent=4)
