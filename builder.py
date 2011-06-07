@@ -422,6 +422,8 @@ def main(options):
 		source = prepare(settings, dir=options.dir, tag=options.tag)
 		env = settings['deploy'].get(options.env, None)
 		if not env: error('deploy %s not found' % options.env)
+
+		# Build and update
 		if options.build:
 			n = 1 #TODO: Calculate number of new servers
 			res = raw_input('Create %s server%s [y/N]? ' % (n, n>1 and 's' or ''))
@@ -441,7 +443,6 @@ def main(options):
 			if 'autoscale' in machine and 'load_balancer' in machine:
 				get_instance(ec2, machine['host']).terminate()
 				env['host'] = env['load_balancer']['host']
-				
 		json.dump(settings, open(conf, 'w'), indent=4)
 
 if __name__ == '__main__':
