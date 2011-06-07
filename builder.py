@@ -143,9 +143,9 @@ def autoscale(ec2, env):
 
 			# Create ec2 launch configuration
 			lc = boto.ec2.autoscale.LaunchConfiguration(      
-			            name            = launch_config_name),           
+			            name            = launch_config_name,           
 			            image_id        = machine['image'],     
-			            key_name        = machine['key_name']     
+			            key_name        = machine['key_name'],
 			            instance_type   = machine['size'],   
 			            security_groups = machine['groups'])
 			print lc
@@ -182,7 +182,7 @@ def autoscale(ec2, env):
 
 			}
 			trigger_config.update(autoscale.get('trigger_config',{}))
-			tr = boto.ec2.autoscale.Trigger(trigger_config**)
+			tr = boto.ec2.autoscale.Trigger(**trigger_config)
 			print tr
 			ec2.create_trigger(tr)
 	

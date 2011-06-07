@@ -12,7 +12,7 @@
                 ], 
                 "key_pair": "ec2.example", 
                 "name": "default example", 
-                "size": "t1.micro"
+                "size": "t1.micro",
                 "update": [], 
                 "url": "/", 
             }
