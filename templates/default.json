@@ -2,19 +2,19 @@
     "deploy": {
         "default": [
             {
+                "base": "ami-1aad5273", 
+                "groups": [
+                    "default"
+                ], 
                 "init": [
                     "sudo chown ubuntu:ubuntu /srv",
                     "sudo apt-get -y install python-virtualenv"
                 ], 
-                "base": "ami-1aad5273", 
                 "key_pair": "ec2.example", 
                 "name": "default example", 
-                "groups": [
-                    "default"
-                ], 
-                "url": "/", 
-                "update": [], 
                 "size": "t1.micro"
+                "update": [], 
+                "url": "/", 
             }
         ]
     }
