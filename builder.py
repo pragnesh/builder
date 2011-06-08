@@ -161,7 +161,7 @@ def load_balance(elb, env):
 				print 'Creating load balancer ', new_lb
 				machine['load_balancer']['host'] = new_lb.dns_name
 
-def autoscale(asc, env):
+def autoscale(asg, env):
 	""" Autoscale each machine """
 	for machine in env:
 		if 'autoscale' in machine.keys():
@@ -186,7 +186,7 @@ def autoscale(asc, env):
 			            key_name        = machine['key_pair'],
 			            instance_type   = machine['size'],   
 			            security_groups = machine['groups'])
-			asc.create_launch_configuration(lc)
+			asg.create_launch_configuration(lc)
 
 			# Create ec2 autoscaling group 
 			ag = AutoScalingGroup(
@@ -196,7 +196,7 @@ def autoscale(asc, env):
 			            launch_config      = lc,
 			            min_size           = min_size,
 			            max_size           = max_size)
-			asc.create_auto_scaling_group(ag)
+			asg.create_auto_scaling_group(ag)
 			
 			# Create ec2 autoscaling group trigger
 			trigger_config = {
@@ -219,7 +219,7 @@ def autoscale(asc, env):
 			}
 			trigger_config.update(autoscale.get('trigger_config',{}))
 			tr = Trigger(**trigger_config)
-			asc.create_trigger(tr)
+			asg.create_trigger(tr)
 
 class Background(threading.Thread):
 	def __init__(self, fn, finish=None, args=None, kwargs=None):
@@ -300,7 +300,7 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 				Background(update, self.server.reset,
 						[self.server.ec2, env, source]).start()
 
-def map(ec2, elb, asc):
+def map(ec2, elb, asg):
 	""" Map the data from each available connection """
 	# EC2 Keypairs
 	keys = {}
@@ -326,7 +326,7 @@ def map(ec2, elb, asc):
 		info['dns_name']  = elb.dns_name
 		elbs[elb.name] = info
 
-	# Need to map out 'asc'
+	# Need to map out 'asg'
 	# * Launch Configurations
 	# * AutoScaling Groups
 	# * AutoScaling Triggers and Instances
@@ -367,7 +367,7 @@ def main(options):
 	# Get all necessary connections
 	ec2 = boto.connect_ec2(settings['key'], settings['secret'])
 	elb = boto.connect_elb(settings['key'], settings['secret'])
-	asc = boto.connect_autoscale(settings['key'], settings['secret'])
+	asg = boto.connect_autoscale(settings['key'], settings['secret'])
 
 	# Create the server
 	if options.listen:
@@ -394,7 +394,7 @@ def main(options):
 	
 	# Print a map of the data
 	if options.map:
-		keys, groups, elbs, instances = map(ec2, elb, asc)
+		keys, groups, elbs, instances = map(ec2, elb, asg)
 		if keys:
 			print 'Key Pairs:'
 			for k, v in keys.iteritems():
@@ -454,7 +454,7 @@ def main(options):
 	
 		# Load Balance Machines and Autoscale Machines
 		load_balance(elb, env)
-		autoscale(asc, env)
+		autoscale(asg, env)
 
 		# Clean up after autoscaling
 		for machine in env:
