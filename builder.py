@@ -300,7 +300,7 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 				Background(update, self.server.reset,
 						[self.server.ec2, env, source]).start()
 
-def map(ec2, elb):
+def map(ec2, elb, asc):
 	""" Map the data from each available connection """
 	# EC2 Keypairs
 	keys = {}
@@ -326,7 +326,7 @@ def map(ec2, elb):
 		info['dns_name']  = elb.dns_name
 		elbs[elb.name] = info
 
-	# Need to map out
+	# Need to map out 'asc'
 	# * Launch Configurations
 	# * AutoScaling Groups
 	# * AutoScaling Triggers and Instances
@@ -394,7 +394,7 @@ def main(options):
 	
 	# Print a map of the data
 	if options.map:
-		keys, groups, elbs, instances = map(ec2, elb)
+		keys, groups, elbs, instances = map(ec2, elb, asc)
 		if keys:
 			print 'Key Pairs:'
 			for k, v in keys.iteritems():
