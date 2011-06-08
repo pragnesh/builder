@@ -341,7 +341,7 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 				Background(update, self.server.reset,
 						[self.server.ec2, env, source]).start()
 
-def map(ec2):
+def get_map(ec2):
 	""" Map the data from each available connection """
 	# Get extra connections
 	elb = boto.connect_elb(ec2.access_key, ec2.secret_key)
@@ -377,7 +377,10 @@ def map(ec2):
 	# * AutoScaling Groups
 	# * AutoScaling Triggers and Instances
 
-	# Need to map out 's3b'
+	# S3 Buckets
+	buckets = {}
+	for b in s3b.get_all_buckets():
+		buckets[b.name] = b
 
 	# EC2 Instances
 	instances = {}
@@ -394,10 +397,56 @@ def map(ec2):
 		'elbs': elbs,
 		'instances': instances,
 		'keys': keys,
-		's3bs': {},
+		's3bs': buckets,
 		'security_groups': security_groups,
 	}
 	return data
+
+def print_map(ec2):
+	data = get_map(ec2)
+	keys = data.get('keys')
+	if keys:
+		print 'Key Pairs:'
+		for k, v in keys.iteritems():
+			print '\t', k, '\t', v
+
+	security_groups = data.get('security_groups')
+	if security_groups:
+		print
+		print 'Security Groups:'
+		for k, v in security_groups.iteritems():
+			print '\t', k
+			for k2, v2 in v.iteritems():
+				print '\t\t', k2
+				for g in v2: print '\t\t\t', g
+
+	elbs = data.get('elbs')
+	if elbs:
+		print
+		print 'Elastic Load Balancers:'
+		for k, v in elbs.iteritems():
+			print '\t', k
+			for k2, v2 in v.iteritems():
+				print '\t\t', k2, '\t', v2
+
+	buckets = data.get('buckets')
+	if buckets:
+		print
+		print 'Buckets:'
+		for k, v in buckets.iteritems():
+			print '\t', k, '\t', v
+
+	instances = data.get('instances')
+	if instances:
+		print
+		print 'Instances:'
+		for k, v in instances.iteritems():
+			print '\tAMI: %s (%s)' % (k, 'running' in v and 
+					', '.join([g.groupName for g in v['running'][0].groups])
+					or 'no images running')
+			for k2, v2 in v.iteritems():
+				print '\t\t%s:' % k2, ', '.join([k2=='running' and
+					i.public_dns_name or i.reason for i in v2])
 
 def main(options):
 	conf = os.path.abspath(options.conf)
@@ -449,44 +498,8 @@ def main(options):
 	
 	# Print a map of the data
 	if options.map:
-		data = map(ec2)
-		keys = data.get('keys')
-		if keys:
-			print 'Key Pairs:'
-			for k, v in keys.iteritems():
-				print '\t', k, '\t', v
+		print_map(ec2)
 
-		security_groups = data.get('security_groups')
-		if security_groups:
-			print
-			print 'Security Groups:'
-			for k, v in security_groups.iteritems():
-				print '\t', k
-				for k2, v2 in v.iteritems():
-					print '\t\t', k2
-					for g in v2: print '\t\t\t', g
-
-		elbs = data.get('elbs')
-		if elbs:
-			print
-			print 'Elastic Load Balancers:'
-			for k, v in elbs.iteritems():
-				print '\t', k
-				for k2, v2 in v.iteritems():
-					print '\t\t', k2, '\t', v2
-
-		instances = data.get('instances')
-		if instances:
-			print
-			print 'Instances:'
-			for k, v in instances.iteritems():
-				print '\tAMI: %s (%s)' % (k, 'running' in v and 
-						', '.join([g.groupName for g in v['running'][0].groups])
-						or 'no images running')
-				for k2, v2 in v.iteritems():
-					print '\t\t%s:' % k2, ', '.join([k2=='running' and
-						i.public_dns_name or i.reason for i in v2])
-	
 	# Open the shell
 	if options.shell:
 		sys.argv = sys.argv[:1]
