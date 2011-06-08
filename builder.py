@@ -224,6 +224,11 @@ def autoscale(ec2, env):
 			tr = Trigger(**trigger_config)
 			asg.create_trigger(tr)
 
+def s3_percent_cb(complete, total):
+	""" Callback method for s3 bucket """
+	sys.stdout.write('.')
+	sys.stdout.flush()
+
 def s3bucket(ec2, env, source):
 	""" Copy contents of static directory to s3 bucket """
 	s3b = boto.connect_s3(ec2.access_key,ec2.secret_key)
@@ -248,8 +253,9 @@ def s3bucket(ec2, env, source):
 				
 				for file in files:
 					k.key = os.path.join(key_root,file)
-					k.set_contents_from_filename(os.path.join(root,file))
-
+					filename = os.path.join(root,file)
+					print 'Transfering %s' % filename
+					k.set_contents_from_filename(filename, cb=s3_percent_cb, num_cb=10)
 
 class Background(threading.Thread):
 	def __init__(self, fn, finish=None, args=None, kwargs=None):
