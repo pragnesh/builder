@@ -232,18 +232,14 @@ def s3_percent_cb(complete, total):
 def s3bucket(ec2, env, source):
 	""" Copy contents of static directory to s3 bucket """
 	s3b = boto.connect_s3(ec2.access_key,ec2.secret_key)
-	rs  = s3b.get_all_buckets()
 	for machine in env:
 		if 's3bucket' in machine.keys():
 			print 'Copying static media for %s' % machine['name']
 			s3bucket = machine['s3bucket']
 
 			name = s3bucket.get('name','s3%s'%machine['name'])
-			b = None
-			for b in rs:
-				if name == r.name: break
-			if not b:
-				b = s3b.create_bucket(name)
+			try: b = s3b.get_bucket(name)
+			except: b = s3b.create_bucket(name)
 
 			k = Key(b)
 			static_dir = os.path.join(source,'static')
