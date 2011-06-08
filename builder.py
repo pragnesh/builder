@@ -354,7 +354,7 @@ def map(ec2):
 		keys[k.name] = k.fingerprint
 	
 	# EC2 Security Groups
-	groups = {}
+	security_groups = {}
 	for s in ec2.get_all_security_groups():
 		rules = {}
 		for r in s.rules:
@@ -362,7 +362,7 @@ def map(ec2):
 			if g not in rules: rules[g] = []
 			rules[g].append('%s:[%s%s]' % (r.ip_protocol, r.from_port,
 				r.to_port != r.from_port and '-'+r.to_port or ''))
-		groups[s.name] = rules
+		security_groups[s.name] = rules
 	
 	# Elastic Load Balancers
 	elbs = {}
@@ -388,7 +388,16 @@ def map(ec2):
 			if i.state not in instances[i.image_id]:
 				instances[i.image_id][i.state] = []
 			instances[i.image_id][i.state].append(i)
-	return keys, groups, elbs, instances
+	
+	data = {
+		'asgs': {},
+		'elbs': elbs,
+		'instances': instances,
+		'keys': keys,
+		's3bs': {},
+		'security_groups': security_groups,
+	}
+	return data
 
 def main(options):
 	conf = os.path.abspath(options.conf)
@@ -440,19 +449,24 @@ def main(options):
 	
 	# Print a map of the data
 	if options.map:
-		keys, groups, elbs, instances = map(ec2)
+		data = map(ec2)
+		keys = data.get('keys')
 		if keys:
 			print 'Key Pairs:'
 			for k, v in keys.iteritems():
 				print '\t', k, '\t', v
-		if groups:
+
+		security_groups = data.get('security_groups')
+		if security_groups:
 			print
 			print 'Security Groups:'
-			for k, v in groups.iteritems():
+			for k, v in security_groups.iteritems():
 				print '\t', k
 				for k2, v2 in v.iteritems():
 					print '\t\t', k2
 					for g in v2: print '\t\t\t', g
+
+		elbs = data.get('elbs')
 		if elbs:
 			print
 			print 'Elastic Load Balancers:'
@@ -460,6 +474,8 @@ def main(options):
 				print '\t', k
 				for k2, v2 in v.iteritems():
 					print '\t\t', k2, '\t', v2
+
+		instances = data.get('instances')
 		if instances:
 			print
 			print 'Instances:'
