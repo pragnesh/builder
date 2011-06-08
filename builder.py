@@ -381,16 +381,18 @@ def main(options):
 		print 'Generated %s' % path(os.path.join(cwd, '%s.pem'%options.key))
 	if options.map:
 		keys, groups, elbs, instances = map(ec2, elb)
-		print 'Key Pairs:'
-		for k, v in keys.iteritems():
-			print '\t', k, '\t', v
-		print
-		print 'Security Groups:'
-		for k, v in groups.iteritems():
-			print '\t', k
-			for k2, v2 in v.iteritems():
-				print '\t\t', k2
-				for g in v2: print '\t\t\t', g
+		if keys:
+			print 'Key Pairs:'
+			for k, v in keys.iteritems():
+				print '\t', k, '\t', v
+		if groups:
+			print
+			print 'Security Groups:'
+			for k, v in groups.iteritems():
+				print '\t', k
+				for k2, v2 in v.iteritems():
+					print '\t\t', k2
+					for g in v2: print '\t\t\t', g
 		if elbs:
 			print
 			print 'Elastic Load Balancers:'
@@ -398,15 +400,16 @@ def main(options):
 				print '\t', k
 				for k2, v2 in v.iteritems():
 					print '\t\t', k2, '\t', v2
-		print
-		print 'Instances:'
-		for k, v in instances.iteritems():
-			print '\tAMI: %s (%s)' % (k, 'running' in v and 
-					', '.join([g.groupName for g in v['running'][0].groups])
-					or 'no images running')
-			for k2, v2 in v.iteritems():
-				print '\t\t%s:' % k2, ', '.join([k2=='running' and
-					i.public_dns_name or i.reason for i in v2])
+		if instances:
+			print
+			print 'Instances:'
+			for k, v in instances.iteritems():
+				print '\tAMI: %s (%s)' % (k, 'running' in v and 
+						', '.join([g.groupName for g in v['running'][0].groups])
+						or 'no images running')
+				for k2, v2 in v.iteritems():
+					print '\t\t%s:' % k2, ', '.join([k2=='running' and
+						i.public_dns_name or i.reason for i in v2])
 	if options.shell:
 		sys.argv = sys.argv[:1]
 		try:
