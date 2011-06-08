@@ -291,6 +291,7 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 		%(actions)s
 		<div>Refreshing in <span id="time">10</span> seconds</div>
 		</form>
+		<ul>%(servers)s</ul>
 		%(fortune)s
 	</body>
 	</html>
@@ -304,7 +305,17 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 		self.send_response(200)
 		self.send_header('Content-Type', 'text/html')
 		self.end_headers()
+		servers = ''
 		kwargs = {'actions':'', 'status':self.server.status, 'version':VERSION}
+		for e in self.server.settings['deploy']:
+			servers += '<li>%s<ul>'%e
+			for m in self.server.settings['deploy'][e]:
+				h = m.get('host', '')
+				servers += ('<li><a href="%s">%s</a></li>' % (
+					h and 'http://%s%s'%(h, m.get('url', '')) or '',
+					m.get('name', 'Unnamed Machine')))
+			servers += '</ul></li>'
+		kwargs['servers'] = servers
 		try:
 			kwargs['fortune'] = '<hr /><div class="footer">%s</div>' % subprocess.check_output('fortune')
 		except: kwargs['fortune'] = ''
