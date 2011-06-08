@@ -449,6 +449,7 @@ def print_map(ec2):
 					i.public_dns_name or i.reason for i in v2])
 
 def main(options):
+	# Get or create the conf file and set the settings
 	conf = os.path.abspath(options.conf)
 	if not os.path.exists(conf):
 		if options.template:
@@ -470,7 +471,7 @@ def main(options):
 			error('conf file creation interrupted')
 	settings = json.load(open(conf))
 
-	# Get all necessary connections
+	# Open EC2 connection
 	ec2 = boto.connect_ec2(settings['key'], settings['secret'])
 
 	# Create the server
@@ -497,8 +498,7 @@ def main(options):
 		print 'Generated %s' % path(os.path.join(cwd, '%s.pem'%options.key))
 	
 	# Print a map of the data
-	if options.map:
-		print_map(ec2)
+	if options.map: print_map(ec2)
 
 	# Open the shell
 	if options.shell:
