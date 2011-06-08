@@ -4,9 +4,7 @@ from stat import S_IMODE
 import BaseHTTPServer, tempfile, threading, urlparse
 
 import boto, paramiko
-from boto.ec2.autoscale import LaunchConfiguration
-from boto.ec2.autoscale import AutoScalingGroup
-from boto.ec2.autoscale import Trigger
+from boto.ec2.autoscale import AutoScalingGroup, LaunchConfiguration, Trigger
 
 default_ami      = 'ami-1aad5273' #64-bit Ubuntu 11.04, us-east-1
 default_key_pair = 'ec2.example'
