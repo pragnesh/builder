@@ -131,8 +131,9 @@ def update(ec2, env, source):
 		machine['image'] = ec2.create_image(instance.id, '%s %s' % (machine['name'],now), 
 				description='Image of %s on %s' % (machine['name'],now))
 
-def load_balance(elb, env):
+def load_balance(ec2, env):
 	""" Create the load balancers if they do not exist """
+	elb = boto.connect_elb(ec2.access_key, ec2.secret_key)
 	for machine in env:
 		if 'load_balancer' in machine.keys():
 			lb_list = [lb.name for lb in elb.get_all_load_balancers()]
@@ -301,9 +302,10 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 				Background(update, self.server.reset,
 						[self.server.ec2, env, source]).start()
 
-def map(ec2, elb):
+def map(ec2):
 	""" Map the data from each available connection """
 	# Get extra connections
+	elb = boto.connect_elb(ec2.access_key, ec2.secret_key)
 	asg = boto.connect_autoscale(ec2.access_key, ec2.secret_key)
 
 	# EC2 Keypairs
@@ -324,11 +326,11 @@ def map(ec2, elb):
 	
 	# Elastic Load Balancers
 	elbs = {}
-	for elb in elb.get_all_load_balancers():
+	for lb in elb.get_all_load_balancers():
 		info = {}
-		info['instances'] = elb.instances
-		info['dns_name']  = elb.dns_name
-		elbs[elb.name] = info
+		info['instances'] = lb.instances
+		info['dns_name']  = lb.dns_name
+		elbs[lb.name] = info
 
 	# Need to map out 'asg'
 	# * Launch Configurations
@@ -370,7 +372,6 @@ def main(options):
 
 	# Get all necessary connections
 	ec2 = boto.connect_ec2(settings['key'], settings['secret'])
-	elb = boto.connect_elb(settings['key'], settings['secret'])
 
 	# Create the server
 	if options.listen:
@@ -397,7 +398,7 @@ def main(options):
 	
 	# Print a map of the data
 	if options.map:
-		keys, groups, elbs, instances = map(ec2, elb)
+		keys, groups, elbs, instances = map(ec2)
 		if keys:
 			print 'Key Pairs:'
 			for k, v in keys.iteritems():
@@ -456,7 +457,7 @@ def main(options):
 		json.dump(settings, open(conf, 'w'), indent=4)
 	
 		# Load Balance Machines and Autoscale Machines
-		load_balance(elb, env)
+		load_balance(ec2, env)
 		autoscale(ec2, env)
 
 		# Clean up after autoscaling
