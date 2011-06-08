@@ -4,9 +4,7 @@ from stat import S_IMODE
 import BaseHTTPServer, tempfile, threading, urlparse
 
 import boto, paramiko
-from boto.ec2.autoscale import LaunchConfiguration
-from boto.ec2.autoscale import AutoScalingGroup
-from boto.ec2.autoscale import Trigger
+from boto.ec2.autoscale import AutoScalingGroup, LaunchConfiguration, Trigger
 
 default_ami      = 'ami-1aad5273' #64-bit Ubuntu 11.04, us-east-1
 default_key_pair = 'ec2.example'
@@ -22,9 +20,11 @@ defaults = {'key':None, 'secret':None, 'repo':None, 'deploy':{
 	}],
 }}
 def error(message):
+	""" Print error and exit """
 	sys.exit('%s %s' % (alert('\nerror:'), message))
 
 def warning(message):
+	""" Print warning """
 	print alert('warning:'), message
 
 def get_key(source, name):
@@ -46,6 +46,7 @@ def get_key(source, name):
 	return key
 
 def ssh(host, key, command):
+	""" Call ssh with a host, key, and a command to run """
 	client = paramiko.SSHClient()
 	client.load_system_host_keys()
 	client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -130,7 +131,9 @@ def update(ec2, env, source):
 		machine['image'] = ec2.create_image(instance.id, '%s %s' % (machine['name'],now), 
 				description='Image of %s on %s' % (machine['name'],now))
 
-def load_balance(elb, env):
+def load_balance(ec2, env):
+	""" Create the load balancers if they do not exist """
+	elb = boto.connect_elb(ec2.access_key, ec2.secret_key)
 	for machine in env:
 		if 'load_balancer' in machine.keys():
 			lb_list = [lb.name for lb in elb.get_all_load_balancers()]
@@ -159,7 +162,9 @@ def load_balance(elb, env):
 				print 'Creating load balancer ', new_lb
 				machine['load_balancer']['host'] = new_lb.dns_name
 
-def autoscale(asc, env):
+def autoscale(ec2, env):
+	""" Autoscale each machine """
+	asg = boto.connect_autoscale(ec2.access_key, ec2.secret_key)
 	for machine in env:
 		if 'autoscale' in machine.keys():
 			print 'Autoscaling %s' % machine['name']
@@ -183,7 +188,7 @@ def autoscale(asc, env):
 			            key_name        = machine['key_pair'],
 			            instance_type   = machine['size'],   
 			            security_groups = machine['groups'])
-			asc.create_launch_configuration(lc)
+			asg.create_launch_configuration(lc)
 
 			# Create ec2 autoscaling group 
 			ag = AutoScalingGroup(
@@ -193,7 +198,7 @@ def autoscale(asc, env):
 			            launch_config      = lc,
 			            min_size           = min_size,
 			            max_size           = max_size)
-			asc.create_auto_scaling_group(ag)
+			asg.create_auto_scaling_group(ag)
 			
 			# Create ec2 autoscaling group trigger
 			trigger_config = {
@@ -216,7 +221,7 @@ def autoscale(asc, env):
 			}
 			trigger_config.update(autoscale.get('trigger_config',{}))
 			tr = Trigger(**trigger_config)
-			asc.create_trigger(tr)
+			asg.create_trigger(tr)
 
 class Background(threading.Thread):
 	def __init__(self, fn, finish=None, args=None, kwargs=None):
@@ -308,7 +313,12 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 				Background(update, self.server.reset,
 						[self.server.ec2, env, source]).start()
 
-def map(ec2, elb):
+def map(ec2):
+	""" Map the data from each available connection """
+	# Get extra connections
+	elb = boto.connect_elb(ec2.access_key, ec2.secret_key)
+	asg = boto.connect_autoscale(ec2.access_key, ec2.secret_key)
+
 	# EC2 Keypairs
 	keys = {}
 	for k in ec2.get_all_key_pairs():
@@ -327,13 +337,13 @@ def map(ec2, elb):
 	
 	# Elastic Load Balancers
 	elbs = {}
-	for elb in elb.get_all_load_balancers():
+	for lb in elb.get_all_load_balancers():
 		info = {}
-		info['instances'] = elb.instances
-		info['dns_name']  = elb.dns_name
-		elbs[elb.name] = info
+		info['instances'] = lb.instances
+		info['dns_name']  = lb.dns_name
+		elbs[lb.name] = info
 
-	# Need to map out
+	# Need to map out 'asg'
 	# * Launch Configurations
 	# * AutoScaling Groups
 	# * AutoScaling Triggers and Instances
@@ -370,9 +380,11 @@ def main(options):
 		except:
 			error('conf file creation interrupted')
 	settings = json.load(open(conf))
+
+	# Get all necessary connections
 	ec2 = boto.connect_ec2(settings['key'], settings['secret'])
-	elb = boto.connect_elb(settings['key'], settings['secret'])
-	asc = boto.connect_autoscale(settings['key'], settings['secret'])
+
+	# Create the server
 	if options.listen:
 		def reset(self):
 			self.status = 'waiting'
@@ -388,22 +400,28 @@ def main(options):
 					for k in settings['deploy']]) + BuildServer.actions
 		server.serve_forever()
 		return
+	
+	# Create the key
 	if options.key:
 		cwd = os.getcwd()
 		ec2.create_key_pair(options.key).save(cwd)
 		print 'Generated %s' % path(os.path.join(cwd, '%s.pem'%options.key))
+	
+	# Print a map of the data
 	if options.map:
-		keys, groups, elbs, instances = map(ec2, elb)
-		print 'Key Pairs:'
-		for k, v in keys.iteritems():
-			print '\t', k, '\t', v
-		print
-		print 'Security Groups:'
-		for k, v in groups.iteritems():
-			print '\t', k
-			for k2, v2 in v.iteritems():
-				print '\t\t', k2
-				for g in v2: print '\t\t\t', g
+		keys, groups, elbs, instances = map(ec2)
+		if keys:
+			print 'Key Pairs:'
+			for k, v in keys.iteritems():
+				print '\t', k, '\t', v
+		if groups:
+			print
+			print 'Security Groups:'
+			for k, v in groups.iteritems():
+				print '\t', k
+				for k2, v2 in v.iteritems():
+					print '\t\t', k2
+					for g in v2: print '\t\t\t', g
 		if elbs:
 			print
 			print 'Elastic Load Balancers:'
@@ -411,15 +429,18 @@ def main(options):
 				print '\t', k
 				for k2, v2 in v.iteritems():
 					print '\t\t', k2, '\t', v2
-		print
-		print 'Instances:'
-		for k, v in instances.iteritems():
-			print '\tAMI: %s (%s)' % (k, 'running' in v and 
-					', '.join([g.groupName for g in v['running'][0].groups])
-					or 'no images running')
-			for k2, v2 in v.iteritems():
-				print '\t\t%s:' % k2, ', '.join([k2=='running' and
-					i.public_dns_name or i.reason for i in v2])
+		if instances:
+			print
+			print 'Instances:'
+			for k, v in instances.iteritems():
+				print '\tAMI: %s (%s)' % (k, 'running' in v and 
+						', '.join([g.groupName for g in v['running'][0].groups])
+						or 'no images running')
+				for k2, v2 in v.iteritems():
+					print '\t\t%s:' % k2, ', '.join([k2=='running' and
+						i.public_dns_name or i.reason for i in v2])
+	
+	# Open the shell
 	if options.shell:
 		sys.argv = sys.argv[:1]
 		try:
@@ -429,6 +450,8 @@ def main(options):
 			import code
 			code.interact()
 		return
+	
+	# Build or Update
 	if options.build or options.update:
 		source = prepare(settings, dir=options.dir, tag=options.tag)
 		env = settings['deploy'].get(options.env, None)
@@ -445,8 +468,8 @@ def main(options):
 		json.dump(settings, open(conf, 'w'), indent=4)
 	
 		# Load Balance Machines and Autoscale Machines
-		load_balance(elb, env)
-		autoscale(asc, env)
+		load_balance(ec2, env)
+		autoscale(ec2, env)
 
 		# Clean up after autoscaling
 		for machine in env:
