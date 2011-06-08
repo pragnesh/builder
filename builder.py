@@ -284,7 +284,7 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 			for m in self.server.settings['deploy'][e]:
 				h = m.get('host', '')
 				servers += ('<li><a href="%s">%s</a></li>' % (
-					h and 'http://%s'%h or '',
+					h and 'http://%s%s'%(h, m.get('url', '')) or '',
 					m.get('name', 'Unnamed Machine')))
 			servers += '</ul></li>'
 		kwargs['servers'] = servers
