@@ -5,6 +5,7 @@ import BaseHTTPServer, tempfile, threading, urlparse
 
 import boto, paramiko
 from boto.ec2.autoscale import AutoScalingGroup, LaunchConfiguration, Trigger
+from boto.s3.key import Key
 
 default_ami      = 'ami-1aad5273' #64-bit Ubuntu 11.04, us-east-1
 default_key_pair = 'ec2.example'
@@ -223,6 +224,33 @@ def autoscale(ec2, env):
 			tr = Trigger(**trigger_config)
 			asg.create_trigger(tr)
 
+def s3bucket(ec2, env, source):
+	""" Copy contents of static directory to s3 bucket """
+	s3b = boto.connect_s3(ec2.access_key,ec2.secret_key)
+	rs  = s3b.get_all_buckets()
+	for machine in env:
+		if 's3bucket' in machine.keys():
+			print 'Copying static media for %s' % machine['name']
+			s3bucket = machine['s3bucket']
+
+			name = s3bucket.get('name','s3%s'%machine['name'])
+			b = None
+			for b in rs:
+				if name == r.name: break
+			if not b:
+				b = s3b.create_bucket(name)
+
+			k = Key(b)
+			static_dir = os.path.join(source,'static')
+			for root, dirs, files in os.walk(static_dir):
+				if '.svn' in dirs: dirs.remove('.svn')
+				key_root = root.split('static/')[1]
+				
+				for file in files:
+					k.key = os.path.join(key_root,file)
+					k.set_contents_from_filename(os.path.join(root,file))
+
+
 class Background(threading.Thread):
 	def __init__(self, fn, finish=None, args=None, kwargs=None):
 		self.fn = fn
@@ -307,6 +335,7 @@ def map(ec2):
 	# Get extra connections
 	elb = boto.connect_elb(ec2.access_key, ec2.secret_key)
 	asg = boto.connect_autoscale(ec2.access_key, ec2.secret_key)
+	s3b = boto.connect_s3(ec2.access_key,ec2.secret_key)
 
 	# EC2 Keypairs
 	keys = {}
@@ -336,6 +365,8 @@ def map(ec2):
 	# * Launch Configurations
 	# * AutoScaling Groups
 	# * AutoScaling Triggers and Instances
+
+	# Need to map out 's3b'
 
 	# EC2 Instances
 	instances = {}
