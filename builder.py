@@ -242,16 +242,18 @@ def s3bucket(ec2, env, source):
 			except: b = s3b.create_bucket(name)
 
 			k = Key(b)
-			static_dir = os.path.join(source,'static')
+			static_dir = os.path.join(source,'project','static')
 			for root, dirs, files in os.walk(static_dir):
 				if '.svn' in dirs: dirs.remove('.svn')
-				key_root = root.split('static/')[1]
-				
+				key_root = root.split('static')[1]
+
 				for file in files:
-					k.key = os.path.join(key_root,file)
 					filename = os.path.join(root,file)
-					print 'Transfering %s' % filename
-					k.set_contents_from_filename(filename, cb=s3_percent_cb, num_cb=10)
+					if os.path.isfile(filename):
+						k.key = os.path.join(key_root,file)
+						print '\nTransfering %s' % filename
+						k.set_contents_from_filename(filename, cb=s3_percent_cb, num_cb=10)
+			print '\nTransfer complete'
 
 class Background(threading.Thread):
 	def __init__(self, fn, finish=None, args=None, kwargs=None):
@@ -513,10 +515,12 @@ def main(options):
 			code.interact()
 		return
 	
+	# Set the source and env variables from the config
+	source = prepare(settings, dir=options.dir, tag=options.tag)
+	env = settings['deploy'].get(options.env, None)
+
 	# Build or Update
 	if options.build or options.update:
-		source = prepare(settings, dir=options.dir, tag=options.tag)
-		env = settings['deploy'].get(options.env, None)
 		if not env: error('deploy %s not found' % options.env)
 
 		# Build and update
@@ -540,6 +544,10 @@ def main(options):
 				get_instance(ec2, machine['host']).terminate()
 				env['host'] = env['load_balancer']['host']
 		json.dump(settings, open(conf, 'w'), indent=4)
+
+	# Push static media to s3bucket
+	if options.bucket:
+		s3bucket(ec2,env,source)
 
 if __name__ == '__main__':
 	# Command line parser
@@ -568,6 +576,8 @@ if __name__ == '__main__':
 	parser.add_option('-l', '--listen',
 			help='listen for requests on port PORT',
 			metavar='PORT', type='int')
+	parser.add_option('-S', '--s3bucket', action='store_true',
+			dest='bucket', help='upload static files to s3bucket',)
 	parser.add_option('-T', '--template',
 			help='use template file FILE to build out new config',
 			metavar='FILE')
