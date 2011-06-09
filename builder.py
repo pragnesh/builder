@@ -336,14 +336,15 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 			env = self.server.settings['deploy'][post['env'][0]]
 			tag = self.server.tag #TODO: Make choosable?
 			source = prepare(self.server.settings, dir=self.server.dir, tag=tag)
+			updater = Background(update, self.server.reset,
+					[self.server.ec2, env, source])
 			if action == 'Build':
 				self.server.status = 'building'
-				Background(build, self.server.reset,
+				Background(build, updater.start,
 						[self.server.ec2, env, source]).start()
 			elif action == 'Update':
 				self.server.status = 'updating'
-				Background(update, self.server.reset,
-						[self.server.ec2, env, source]).start()
+				updater.start()
 
 def get_map(ec2):
 	""" Map the data from each available connection """
