@@ -355,7 +355,8 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 	</html>
 	'''
 	actions = '''<input name="action" type="submit" value="Build" />
-	<input name="action" type="submit" value="Update" />'''
+	<input name="action" type="submit" value="Update" />
+	<input name="action" type="submit" value="Sync Static" />'''
 	def do_GET(self):
 		if self.path != '/':
 			self.send_response(204)
@@ -399,6 +400,10 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 			elif action == 'Update':
 				self.server.status = 'updating'
 				updater.start()
+			elif action == 'Sync Static':
+				self.server.status = 'syncing static files'
+				Background(s3bucket, self.server.reset,
+						[self.server.ec2, env, source]).start()
 
 def get_map(ec2):
 	""" Map the data from each available connection """
