@@ -329,6 +329,7 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 		.waiting {color:#0f0;}
 		.building {color:#f00;}
 		.updating {color:#00f;}
+		.syncing {color:#00f;}
 		.footer {font:x-small monospace; white-space:pre-wrap;}
 		</style>
 		<script type="text/javascript">
@@ -403,10 +404,9 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 				self.server.status = 'updating'
 				updater.start()
 			elif action == 'Sync Static':
-				self.server.status = 'syncing static files'
+				self.server.status = 'syncing'
 				Background(s3bucket, self.server.reset,
 						[self.server.ec2, env, source]).start()
-				
 
 def get_map(ec2):
 	""" Map the data from each available connection """
