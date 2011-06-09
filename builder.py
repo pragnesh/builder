@@ -231,15 +231,34 @@ def s3_percent_cb(complete, total):
 
 def s3bucket(ec2, env, source):
 	""" Copy contents of static directory to s3 bucket """
+	mime_types = {
+		"eot" : "application/vnd.ms-fontobject",
+		"ttf" : "font/truetype",
+		"otf" : "font/opentype",
+		"woff": "font/woff",
+	}
 	s3b = boto.connect_s3(ec2.access_key,ec2.secret_key)
 	for machine in env:
 		if 's3bucket' in machine.keys():
 			print 'Copying static media for %s' % machine['name']
 			s3bucket = machine['s3bucket']
 
-			name = s3bucket.get('name','s3%s'%machine['name'])
+			# Get the expires
+			time_format = '%a, %d %b %Y %H:%M:%S'
+			now = datetime.datetime.now().strftime(time_format)
+			expires = s3bucket.get('expires',datetime.datetime.utcnow().strftime(time_format))
+			try:
+				datetime.datetime.strptime(expires,time_format)
+			except:
+				error('Improperly formatted datetime: %s' % expires)
+
+			# Get or create bucket using the name
+			name    = s3bucket.get('name','s3%s'%machine['name'])
 			try: b = s3b.get_bucket(name)
 			except: b = s3b.create_bucket(name)
+			
+			# Set ACL Public for all items in the bucket
+			b.set_acl('public-read')
 
 			k = Key(b)
 			static_dir = os.path.join(source,'project','static')
@@ -249,10 +268,22 @@ def s3bucket(ec2, env, source):
 
 				for file in files:
 					filename = os.path.join(root,file)
+
+					# Set the headers
+					headers = {'Expires':expires}
+					if '.gz' in file:
+						headers.update({'Content-Encoding':'gzip'})
+
 					if os.path.isfile(filename):
+						# Set the mime-type
+						ext = file.split('.')[-1]
+						if ext in mime_types.keys():
+							k.content_type = mime_types[ext]
+
+						# Send the file
 						k.key = os.path.join(key_root,file)
 						print '\nTransfering %s' % filename
-						k.set_contents_from_filename(filename, cb=s3_percent_cb, num_cb=10)
+						k.set_contents_from_filename(filename, headers=headers, cb=s3_percent_cb, num_cb=10)
 			print '\nTransfer complete'
 
 class Background(threading.Thread):
