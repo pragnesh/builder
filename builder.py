@@ -287,6 +287,8 @@ def s3bucket(ec2, env, source):
 						k.set_contents_from_filename(filename, headers=headers, cb=s3_percent_cb, num_cb=10)
 			print '\nTransfer complete'
 
+	invalidate_cache(ec2, env, source)
+
 def invalidate_cache(ec2, env, source):
 	""" Invalidate CloudFront cache for each machine with a Cloudfront Distribution ID"""
 	# NOTE: Creating distributions is not yet supported, only cache invalidation
@@ -404,6 +406,7 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 				self.server.status = 'syncing static files'
 				Background(s3bucket, self.server.reset,
 						[self.server.ec2, env, source]).start()
+				
 
 def get_map(ec2):
 	""" Map the data from each available connection """
