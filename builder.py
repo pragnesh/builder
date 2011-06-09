@@ -6,6 +6,7 @@ import BaseHTTPServer, tempfile, threading, urlparse
 import boto, paramiko
 from boto.ec2.autoscale import AutoScalingGroup, LaunchConfiguration, Trigger
 from boto.s3.key import Key
+from boto.cloudfront import CloudFrontConnection
 
 default_ami      = 'ami-1aad5273' #64-bit Ubuntu 11.04, us-east-1
 default_key_pair = 'ec2.example'
@@ -285,6 +286,28 @@ def s3bucket(ec2, env, source):
 						print '\nTransfering %s' % filename
 						k.set_contents_from_filename(filename, headers=headers, cb=s3_percent_cb, num_cb=10)
 			print '\nTransfer complete'
+
+def invalidate_cache(ec2, env, source):
+	""" Invalidate CloudFront cache for each machine with a Cloudfront Distribution ID"""
+	# NOTE: Creating distributions is not yet supported, only cache invalidation
+	cfc = CloudFrontConnection(ec2.access_key,ec2.secret_key)
+	for machine in env:
+		if 'cloudfront' in machine.keys():
+			print 'Invalidating cache for %s' % machine['name']
+			cloudfront = machine['cloudfront'] # Cloudfront Distribution ID
+
+			media_files = []
+			static_dir = os.path.join(source,'project','static')
+			for root, dirs, files in os.walk(static_dir):
+				if '.svn' in dirs: dirs.remove('.svn')
+				key_root = root.split('static')[1]
+
+				for file in files:
+					filename = os.path.join(root,file)
+					if os.path.isfile(filename):
+						media_files.append(os.path.join(key_root,file))
+
+			cfc.create_invalidation_request(cloudfront, media_files)
 
 class Background(threading.Thread):
 	def __init__(self, fn, finish=None, args=None, kwargs=None):
@@ -580,6 +603,10 @@ def main(options):
 	# Push static media to s3bucket
 	if options.bucket:
 		s3bucket(ec2,env,source)
+	
+	# Invalidate cloudfront cache
+	if options.cache:
+		invalidate_cache(ec2,env,source)
 
 if __name__ == '__main__':
 	# Command line parser
@@ -610,6 +637,8 @@ if __name__ == '__main__':
 			metavar='PORT', type='int')
 	parser.add_option('-S', '--s3bucket', action='store_true',
 			dest='bucket', help='upload static files to s3bucket',)
+	parser.add_option('-C', '--cache_invalidate', action='store_true',
+			dest='cache', help='invalidate cloudfront cache',)
 	parser.add_option('-T', '--template',
 			help='use template file FILE to build out new config',
 			metavar='FILE')
