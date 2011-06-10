@@ -642,7 +642,7 @@ def main(options):
 		for machine in env:
 			if 'autoscale' in machine and 'load_balancer' in machine:
 				get_instance(ec2, machine['host']).terminate()
-				env['host'] = env['load_balancer'].get('host',env['host'])
+				machine['host'] = machine['load_balancer']['host']
 		json.dump(settings, open(conf, 'w'), indent=4)
 
 	# Push static media to s3bucket
