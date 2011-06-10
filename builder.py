@@ -63,12 +63,13 @@ def ssh(host, key, command):
 
 def prepare(settings, dir=None, tag=None):
 	if dir: source = os.path.abspath(dir)
-	else:
+	elif 'repo' in settings and settings['repo']:
 		source = tempfile.mkdtemp(prefix='builder.%s.' %
 				settings['repo'].split('/')[-2])
 		if tag not in ('trunk', ''): tag = 'tags/%s' % tag
 		subprocess.call('svn co %s%s %s' %
 				(settings['repo'], tag, source), shell=True)
+	else: error('no repo or directory defined')
 	return source
 
 def get_instance(ec2, hostname):
@@ -78,6 +79,17 @@ def get_instance(ec2, hostname):
 			if instance.public_dns_name == hostname:
 				return instance
 	return None
+
+def symlinks(machine, source, key):
+	path  = os.path.join(source, 'deploy', machine['name'])
+	root  = os.path.join('/srv', 'active', 'deploy', machine['name'])
+	links = {}
+	for cur, dirs, files in os.walk(path):
+		for f in files:
+			name = os.path.join(cur, f)[len(path):]
+			links[root+name] = name
+	ssh(machine['host'], key, ';'.join(
+		'sudo ln -s %s %s' % (k, v) for k,v in links.iteritems()))
 
 def build(ec2, env, source):
 	print 'Building servers'
@@ -109,6 +121,7 @@ def build(ec2, env, source):
 		for command in machine['init']:
 			print 'Running [%s]' % command
 			ssh(machine['host'], key, command)
+		symlinks(machine, source, key)
 
 def update(ec2, env, source):
 	print 'Updating servers'
@@ -558,6 +571,10 @@ def main(options):
 	
 	# Print a map of the data
 	if options.map: print_map(ec2)
+	
+	# Set the source and env variables from the config
+	source = prepare(settings, dir=options.dir, tag=options.tag)
+	env = settings['deploy'].get(options.env, None)
 
 	# Open the shell
 	if options.shell:
@@ -569,10 +586,6 @@ def main(options):
 			import code
 			code.interact()
 		return
-	
-	# Set the source and env variables from the config
-	source = prepare(settings, dir=options.dir, tag=options.tag)
-	env = settings['deploy'].get(options.env, None)
 
 	# Build or Update
 	if options.build or options.update:
