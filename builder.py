@@ -300,6 +300,8 @@ def s3bucket(ec2, env, source):
 						k.set_contents_from_filename(filename, headers=headers, cb=s3_percent_cb, num_cb=10)
 			print '\nTransfer complete'
 
+	invalidate_cache(ec2, env, source)
+
 def invalidate_cache(ec2, env, source):
 	""" Invalidate CloudFront cache for each machine with a Cloudfront Distribution ID"""
 	# NOTE: Creating distributions is not yet supported, only cache invalidation
@@ -340,6 +342,7 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 		.waiting {color:#0f0;}
 		.building {color:#f00;}
 		.updating {color:#00f;}
+		.syncing {color:#00f;}
 		.footer {font:x-small monospace; white-space:pre-wrap;}
 		</style>
 		<script type="text/javascript">
@@ -368,7 +371,8 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 	</html>
 	'''
 	actions = '''<input name="action" type="submit" value="Build" />
-	<input name="action" type="submit" value="Update" />'''
+	<input name="action" type="submit" value="Update" />
+	<input name="action" type="submit" value="Sync Static" />'''
 	def do_GET(self):
 		if self.path != '/':
 			self.send_response(204)
@@ -412,6 +416,10 @@ class BuildServer(BaseHTTPServer.BaseHTTPRequestHandler):
 			elif action == 'Update':
 				self.server.status = 'updating'
 				updater.start()
+			elif action == 'Sync Static':
+				self.server.status = 'syncing'
+				Background(s3bucket, self.server.reset,
+						[self.server.ec2, env, source]).start()
 
 def get_map(ec2):
 	""" Map the data from each available connection """
