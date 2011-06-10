@@ -88,8 +88,11 @@ def symlinks(machine, source, key):
 		for f in files:
 			name = os.path.join(cur, f)[len(path):]
 			links[root+name] = name
+	command = '''
+test -a %(new)s && sudo mv %(new)s %(new)s.`date +%%m:%%d:%%H:%%M`;
+sudo ln -s %(old)s %(new)s'''
 	ssh(machine['host'], key, ';'.join(
-		'sudo ln -s %s %s' % (k, v) for k,v in links.iteritems()))
+		command % {'old':k, 'new':v} for k,v in links.iteritems()))
 
 def build(ec2, env, source):
 	print 'Building servers'
