@@ -628,22 +628,22 @@ def main(options):
 				build(ec2, env, source)
 			else: print "Not building servers"
 		update(ec2, env, source)
-		json.dump(settings, open(conf, 'w'), indent=4)
+		json.dump(settings, open(conf, 'w'), sort_keys=True, indent=4)
 	
 		# Load Balance Machines
 		load_balance(ec2, env)
-		json.dump(settings, open(conf, 'w'), indent=4)
+		json.dump(settings, open(conf, 'w'), sort_keys=True, indent=4)
 		
 		# Autoscale Machines
 		autoscale(ec2, env)
-		json.dump(settings, open(conf, 'w'), indent=4)
+		json.dump(settings, open(conf, 'w'), sort_keys=True, indent=4)
 
 		# Clean up after autoscaling
 		for machine in env:
 			if 'autoscale' in machine and 'load_balancer' in machine:
 				get_instance(ec2, machine['host']).terminate()
 				machine['host'] = machine['load_balancer']['host']
-		json.dump(settings, open(conf, 'w'), indent=4)
+		json.dump(settings, open(conf, 'w'), sort_keys=True, indent=4)
 
 	# Push static media to s3bucket
 	if options.bucket:
