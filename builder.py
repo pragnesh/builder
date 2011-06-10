@@ -105,6 +105,8 @@ def build(ec2, env, source):
 				security_groups=machine['groups'],
 				instance_type=machine['size'])
 		i = res.instances[0]
+		i.add_tag('Name', machine['name'])
+		time.sleep(5)
 		while i.update() == 'pending':
 			print 'Waiting ten seconds on %s' % i
 			time.sleep(10)
@@ -112,7 +114,6 @@ def build(ec2, env, source):
 			warning('%s has been replaced' % machine['host'])
 			#TODO: Terminate?  ec2.get_all_instances(filters={'dns-name':machine['host']})
 		machine['host'] = i.public_dns_name
-		i.add_tag('Name', machine['name'])
 		while 1:
 			try:
 				print 'Seeing if %s is actually online' % machine['host']
