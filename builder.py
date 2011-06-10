@@ -155,7 +155,6 @@ def load_balance(ec2, env):
 	elb = boto.connect_elb(ec2.access_key, ec2.secret_key)
 	for machine in env:
 		if 'load_balancer' in machine.keys():
-			lb_list = [lb.name for lb in elb.get_all_load_balancers()]
 			load_balancer = machine['load_balancer']
 			
 			# Set the defaults
@@ -164,22 +163,26 @@ def load_balance(ec2, env):
 			lb_listeners       = load_balancer.get('listeners',[(80, 80, 'http')])
 			health_check       = load_balancer.get('health_check',{})
 
-			# Create a health check for the load balancer
-			hc = boto.ec2.elb.HealthCheck(
-					health_check.get('name','instance_health'),
-					interval            = health_check.get('interval', 20),
-					target              = health_check.get('target', 'HTTP:80/'),
-					healthy_threshold   = health_check.get('healthy_threshold',2),
-					timeout             = health_check.get('timeout',5),
-					unhealthy_threshold = health_check.get('unhealthy_threshold',5),
-					)
+			try:
+				new_lb = elb.get_all_load_balancers(load_balancer_names=[lb_name])[0]
+			except:
+				# Create a health check for the load balancer
+				hc = boto.ec2.elb.HealthCheck(
+						health_check.get('name','instance_health'),
+						interval            = health_check.get('interval', 20),
+						target              = health_check.get('target', 'HTTP:80/'),
+						healthy_threshold   = health_check.get('healthy_threshold',2),
+						timeout             = health_check.get('timeout',5),
+						unhealthy_threshold = health_check.get('unhealthy_threshold',5),
+						)
 
-			# Create the load balancer if it does not exist
-			if lb_name not in lb_list:
+				# Create the load balancer if it does not exist
 				new_lb = elb.create_load_balancer(lb_name, availability_zones, lb_listeners)
 				new_lb.configure_health_check(hc)
 				print 'Creating load balancer ', new_lb
-				machine['load_balancer']['host'] = new_lb.dns_name
+
+			# Set the host
+			machine['load_balancer']['host'] = new_lb.dns_name
 
 def autoscale(ec2, env):
 	""" Autoscale each machine """
@@ -627,15 +630,19 @@ def main(options):
 		update(ec2, env, source)
 		json.dump(settings, open(conf, 'w'), indent=4)
 	
-		# Load Balance Machines and Autoscale Machines
+		# Load Balance Machines
 		load_balance(ec2, env)
+		json.dump(settings, open(conf, 'w'), indent=4)
+		
+		# Autoscale Machines
 		autoscale(ec2, env)
+		json.dump(settings, open(conf, 'w'), indent=4)
 
 		# Clean up after autoscaling
 		for machine in env:
 			if 'autoscale' in machine and 'load_balancer' in machine:
 				get_instance(ec2, machine['host']).terminate()
-				env['host'] = env['load_balancer']['host']
+				env['host'] = env['load_balancer'].get('host',env['host'])
 		json.dump(settings, open(conf, 'w'), indent=4)
 
 	# Push static media to s3bucket
