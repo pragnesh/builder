@@ -201,23 +201,35 @@ def autoscale(ec2, env):
 			load_balancers     = [machine.get('load_balancer',{}).get('name')]
 
 			# Create ec2 launch configuration
-			lc = LaunchConfiguration(      
-			            name            = launch_config_name,           
-			            image_id        = machine['image'],     
-			            key_name        = machine['key_pair'],
-			            instance_type   = machine['size'],   
-			            security_groups = machine['groups'])
-			asg.create_launch_configuration(lc)
+			try:
+				lc = asg.get_all_launch_configurations(names=[launch_config_name])[0]
+			except:
+				lc = LaunchConfiguration(      
+				            name            = launch_config_name,           
+				            image_id        = machine['image'],     
+				            key_name        = machine['key_pair'],
+				            instance_type   = machine['size'],   
+				            security_groups = machine['groups'])
+				asg.create_launch_configuration(lc)
 
-			# Create ec2 autoscaling group 
-			ag = AutoScalingGroup(
-			            group_name         = group_name, 
-			            load_balancers     = load_balancers,
-			            availability_zones = availability_zones,
-			            launch_config      = lc,
-			            min_size           = min_size,
-			            max_size           = max_size)
-			asg.create_auto_scaling_group(ag)
+			# Create ec2 autoscaling group
+			try:
+				ag = asg.get_all_groups(names=[group_name])[0]
+				ag.load_balancers     = load_balancers
+				ag.availability_zones = availability_zones
+				ag.launch_config      = lc
+				ag.min_size           = min_size
+				ag.max_size           = max_size
+				ag.update()
+			except:
+				ag = AutoScalingGroup(
+				            group_name         = group_name, 
+				            load_balancers     = load_balancers,
+				            availability_zones = availability_zones,
+				            launch_config      = lc,
+				            min_size           = min_size,
+				            max_size           = max_size)
+				asg.create_auto_scaling_group(ag)
 			
 			# Create ec2 autoscaling group trigger
 			trigger_config = {
@@ -605,7 +617,9 @@ def main(options):
 
 		# Build and update
 		if options.build:
-			n = len(env) #TODO: Calculate number of new servers including autoscaling
+			# Calculate number of new servers including autoscaling
+			n = 0
+			for machine in env: n += int(machine.get('autoscale',{}).get('min_size',1))
 			res = raw_input('Create %s server%s [y/N]? ' % (n, n>1 and 's' or ''))
 			if res and res.lower()[0] == 'y':
 				build(ec2, env, source)
