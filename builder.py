@@ -106,7 +106,7 @@ def build(ec2, env, source):
 				instance_type=machine['size'])
 		i = res.instances[0]
 		i.add_tag('Name', machine['name'])
-		time.sleep(5)
+		time.sleep(10)
 		while i.update() == 'pending':
 			print 'Waiting ten seconds on %s' % i
 			time.sleep(10)
@@ -605,7 +605,7 @@ def main(options):
 
 		# Build and update
 		if options.build:
-			n = 1 #TODO: Calculate number of new servers
+			n = len(env) #TODO: Calculate number of new servers including autoscaling
 			res = raw_input('Create %s server%s [y/N]? ' % (n, n>1 and 's' or ''))
 			if res and res.lower()[0] == 'y':
 				build(ec2, env, source)
