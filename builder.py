@@ -633,7 +633,6 @@ def main(options):
 
 		# Clean up after autoscaling
 		for machine in env:
-			print 'autoscale' in machine, 'load_balancer' in machine
 			if 'autoscale' in machine and 'load_balancer' in machine:
 				get_instance(ec2, machine['host']).terminate()
 				env['host'] = env['load_balancer']['host']
