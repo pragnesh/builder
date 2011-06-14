@@ -95,6 +95,9 @@ sudo ln -s %(old)s %(new)s'''
 		command % {'old':k, 'new':v} for k,v in links.iteritems()))
 
 def build(ec2, env, source):
+    """
+    Brings up generic instances for each machine type and installs software and services
+    """
 	print 'Building servers'
 	if isinstance(env, dict): env=[env]
 	for machine in env:
