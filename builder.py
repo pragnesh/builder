@@ -97,6 +97,7 @@ sudo ln -s %(old)s %(new)s'''
 def build(ec2, env, source):
     """
     Brings up generic instances for each machine type and installs software and services
+    as specified in your recipe.
     """
 	print 'Building servers'
 	if isinstance(env, dict): env=[env]
@@ -110,6 +111,8 @@ def build(ec2, env, source):
 		i = res.instances[0]
 		i.add_tag('Name', machine['name'])
 		time.sleep(10)
+
+        #  Poll AWS as to it's opinon of the server state. 
 		while i.update() == 'pending':
 			print 'Waiting ten seconds on %s' % i
 			time.sleep(10)
@@ -117,6 +120,8 @@ def build(ec2, env, source):
 			warning('%s has been replaced' % machine['host'])
 			#TODO: Terminate?  ec2.get_all_instances(filters={'dns-name':machine['host']})
 		machine['host'] = i.public_dns_name
+
+        # VM is up but linux isn't booted yet. Try ssh until we can log in.
 		while 1:
 			try:
 				print 'Seeing if %s is actually online' % machine['host']
@@ -125,6 +130,9 @@ def build(ec2, env, source):
 			except:
 				print 'Nope, trying again in five seconds'
 				time.sleep(5)
+
+
+        # run the commands in our recipe
 		for command in machine['init']:
 			print 'Running [%s]' % command
 			ssh(machine['host'], key, command)
